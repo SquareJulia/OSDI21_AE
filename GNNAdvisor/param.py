@@ -9,10 +9,14 @@ class inputProperty(object):
                 dataset_obj=None,
                 enable_rabbit=False,
                 manual_mode=True,
-                verbose=False):
+                verbose=False,
+                sparseRTRatio=0.3):
         
         if dataset_obj is None:
             raise ValueError("Dataset object MUST SET !!!")
+        
+        if sparseRTRatio<0 or sparseRTRatio>1:
+            raise ValueError("sparseRTRation MUST BE BETWEEN 0 and 1 !!!")
 
         self.dataset_obj = dataset_obj
 
@@ -47,6 +51,8 @@ class inputProperty(object):
 
         self.partPtr = None
         self.part2Node = None
+    
+        self.modeBarrier= math.floor(self.num_nodes*sparseRTRatio)
 
     def decider(self):
         '''

@@ -12,6 +12,13 @@ import GNNAdvisor as GNNA           # import GNNAdvisor
 from gnn_conv import *
 from dataset import *
 
+import os
+from cuda import cuda, nvrtc
+from utils import *
+import ctypes
+
+CUDA_SUCCESS = 0
+
 parser = argparse.ArgumentParser()
 # Dataset related parameters.
 parser.add_argument("--dataDir", type=str,
@@ -126,7 +133,39 @@ if verbose_mode:
 ####################################
 
 print(' ==== sparse Matrix for sparseRT')
-srtInputFile = dataset.save_for_sprt(inputInfo.modeBarrier)
+sprtInputFile = dataset.save_for_sprt(inputInfo.modeBarrier)  # .npy
+sprtPtxFile = sprtInputFile.replace('npys', 'dist').replace('.npy', '.ptx')
+A_dim = 6
+B_dim = 6
+C_dim = args.hidden
+A_blocks = 2  # A_dim=6
+C_blocks = 2
+GY = 1
+gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
+    --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
+        --infile {} --outfile {}"\
+            .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, GY, sprtInputFile, sprtPtxFile)
+os.system(gen_ptx_command)
+
+sprtCubinFile = sprtPtxFile.replace('.ptx', '.cubin')
+gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
+    sprtPtxFile, sprtCubinFile)
+os.system(gen_cubin_command)
+kernel_name = ""
+
+
+cu_result_ld, sprt_module = cuda.cuModuleLoad(str2cstr(sprtCubinFile))
+if cu_result_ld != CUDA_SUCCESS:
+    _, cu_string = cuda.cuGetErrorString(cu_result_ld)
+    print("cuModuleLoad failed with error code %d: %s" %
+          (cu_result_ld, cu_string))
+
+cu_result_func, module = cuda.cuModuleGetFunction(
+    sprt_module, b'_Z2mmPKfPf')
+if cu_result_func != CUDA_SUCCESS:
+    _, cu_string = cuda.cuGetErrorString(cu_result_func)
+    print("cuModuleGetFunction failed with error code %d: %s" %
+          (cu_result_func, cu_string))
 
 ####################################
 # Building neighbor partitioning.

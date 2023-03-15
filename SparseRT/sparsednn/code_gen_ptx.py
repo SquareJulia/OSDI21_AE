@@ -283,8 +283,18 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
 
     open(temp_cu_file_name, "w").write(program)
     # TODO: absolute for myself
-    os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
-              " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
+    compile_command = "nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +\
+        " " + temp_cu_file_name + \
+        " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
+    print('---------compile command:')
+    print(compile_command)
+    print('LD_LIBRARY_PATH:')
+    print(os.getenv('LD_LIBRARY_PATH'))
+    print('PATH:')
+    print(os.getenv('PATH'))
+    os.system(compile_command)
+    # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
+    #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
     os.sync()
     reg_names, addresses = parse_ptx(temp_ptx_file_name, A_blocks)
     # print(reg_names)

@@ -87,7 +87,7 @@ int c_y  = C_idx % IMAGE_DIM;
 
 """
 
-START_NONFUSED="""
+START_NONFUSED = """
 #include <cnpy.h>
 
 #include <vector>
@@ -116,6 +116,7 @@ namespace cg = cooperative_groups;
 
 __global__ void mm(const float * __restrict__ BC, float * AC)
 {
+	printf("in cubin mm!\\n");
     register float ACC[Ny] = {0.0};
 	register float RC = 0.0;
 #if Gy > 1	
@@ -140,7 +141,7 @@ __global__ void mm(const float * __restrict__ BC, float * AC)
 """
 
 
-START_NONFUSED_RESIDUAL="""
+START_NONFUSED_RESIDUAL = """
 #include <cnpy.h>
 
 #include <vector>
@@ -193,7 +194,7 @@ __global__ void mm(const float * __restrict__ BC, const float * __restrict__ res
 	int lane = threadIdx.x % (Gsy);
 """
 
-START_FUSED="""
+START_FUSED = """
 #include <cnpy.h>
 
 #include <vector>
@@ -246,11 +247,11 @@ __global__ void mm(const float * __restrict__ BC, float * AC)
 	float k00, k01, k02, k10, k11, k12, k20, k21, k22;
 """
 
-GEN_LOAD="""
+GEN_LOAD = """
 RC = BC[0 + C_offset + lane];
 """
 
-GEN_LOAD_STRIDE="""
+GEN_LOAD_STRIDE = """
 RC[0][0] = BC[0 + C_offset + lane * STRIDE + 0 * Fy];
 """
 
@@ -262,7 +263,7 @@ asm("//END;");
 """
 
 
-GEN_LANDMARK_PTX="""
+GEN_LANDMARK_PTX = """
 asm("//BIGJ;START");
 """
 
@@ -285,11 +286,11 @@ BLOCK_CONTROL_END = """
 }
 """
 
-GEN_LANDMARK="""
+GEN_LANDMARK = """
 asm("//B1G0;");
 """
 
-BLOCK_END_NHWC="""
+BLOCK_END_NHWC = """
    
 #if Gy == 1
     #pragma unroll
@@ -315,23 +316,23 @@ BLOCK_END_NHWC="""
        
 """
 
-BLOCK_END_REDUCTION_NO_RELU="""
+BLOCK_END_REDUCTION_NO_RELU = """
         AC[OFFSET + C_offset  + lane] = ACC[IDX] + BIASf;
 """
 
-BLOCK_END_REDUCTION="""
+BLOCK_END_REDUCTION = """
         AC[OFFSET + C_offset  + lane] = max(ACC[IDX] + BIASf,0.0f);
 """
 
-BLOCK_END_REDUCTION_RESIDUAL="""
+BLOCK_END_REDUCTION_RESIDUAL = """
         AC[OFFSET + C_offset  + lane] = residual[OFFSET + C_offset  + lane] + max(ACC[IDX] + BIASf,0.0f);
 """
 
-BLOCK_END_REDUCTION_RESIDUAL_2="""
+BLOCK_END_REDUCTION_RESIDUAL_2 = """
         AC[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
 """
 
-BLOCK_END="""
+BLOCK_END = """
    
 #if Gy == 1
     for(int i = 0; i < Ny; i++)
@@ -360,7 +361,7 @@ BLOCK_END="""
        
 """
 
-BLOCK_END_RESIDUAL="""
+BLOCK_END_RESIDUAL = """
    
 #if Gy == 1
     for(int i = 0; i < Ny; i++)
@@ -393,7 +394,7 @@ BLOCK_END_RESIDUAL="""
        
 """
 
-END_NONFUSED="""
+END_NONFUSED = """
  
 }
 int main()
@@ -484,7 +485,7 @@ int main()
 }
 """
 
-END_FUSED="""
+END_FUSED = """
  
 }
 int main()

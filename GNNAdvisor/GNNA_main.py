@@ -17,7 +17,6 @@ from cuda import cuda, nvrtc
 from utils import *
 import ctypes
 
-CUDA_SUCCESS = 0
 
 parser = argparse.ArgumentParser()
 # Dataset related parameters.
@@ -150,30 +149,37 @@ os.system(gen_ptx_command)
 sprtCubinFile = sprtPtxFile.replace('.ptx', '.cubin')
 gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
     sprtPtxFile, sprtCubinFile)
+print('generating cubin...')
+print(gen_cubin_command)
 os.system(gen_cubin_command)
 kernel_name = ""
 
 Gsy = C_dim//C_blocks
 Block_size = Gy*Gsy
 
-cu_result_ld, sprt_module = cuda.cuModuleLoad(str2cstr(sprtCubinFile))
-if cu_result_ld != CUDA_SUCCESS:
-    _, cu_string = cuda.cuGetErrorString(cu_result_ld)
-    print("cuModuleLoad failed with error code %d: %s" %
-          (cu_result_ld, cu_string))
 
-cu_result_func, sprt_cu_function = cuda.cuModuleGetFunction(
+# cu_result, sprt_module = cuda.cuModuleLoad(str2cstr(sprtCubinFile))
+cu_result, sprt_module = cuda.cuModuleLoad(
+    bytes(sprtCubinFile, encoding='utf-8'))
+check_cu_result('cuModuleLoad', cu_result)
+
+
+cu_result, sprt_cu_function = cuda.cuModuleGetFunction(
     sprt_module, b'_Z2mmPKfPf')
-if cu_result_func != CUDA_SUCCESS:
-    _, cu_string = cuda.cuGetErrorString(cu_result_func)
-    print("cuModuleGetFunction failed with error code %d: %s" %
-          (cu_result_func, cu_string))
-# sprt_cu_function_ll=ctypes.c_longlong(sprt_cu_function)
-# sprt_cu_function_ll = ctypes.c_ulonglong(sprt_cu_function.getPtr())
+check_cu_result('cuModuleGetFunction', cu_result)
+
 sprt_cu_function_ll = sprt_cu_function.getPtr()
 if verbose_mode:
     print('sprt_cu_function:', sprt_cu_function)
     print('sprt_cu_function_ll:', hex(sprt_cu_function_ll))
+
+cu_result, pctx = cuda.cuCtxCreate(0, 0)
+# cu_result, pctx = cuda.cuCtxGetCurrent()
+check_cu_result('cuCtxCreate', cu_result)
+pctx_ptr = pctx.getPtr()
+if verbose_mode:
+    print('python cu_context:', hex(pctx_ptr))
+
 
 ####################################
 # Building neighbor partitioning.
@@ -203,7 +209,7 @@ if not verify_spmm:
                          inputInfo.row_pointers, inputInfo.column_index, degrees,
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock,
-                         sprt_cu_function_ll, A_blocks, C_blocks, Block_size)
+                         sprt_cu_function_ll, A_blocks, C_blocks, Block_size, pctx_ptr)
     valid.compute()
     valid.reference(dataset.edge_index, dataset.val, dataset.num_nodes)
     valid.compare()

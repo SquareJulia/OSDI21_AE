@@ -4,12 +4,13 @@ import GNNAdvisor as GNNA
 import time
 from tqdm import *
 from torch_sparse import spmm
+from utils import *
 
 
 class Verification(object):
     def __init__(self, dim, row_pointers, column_index, degrees, partPtr, part2Node,
                  partSize, dimWorker, warpPerBlock,
-                 sprt_cu_function, A_blocks, C_blocks, Block_size):
+                 sprt_cu_function, A_blocks, C_blocks, Block_size, pctx_ptr):
 
         self.row_pointers = row_pointers
         self.column_index = column_index
@@ -25,7 +26,8 @@ class Verification(object):
         self.test_embedding = dim
         self.output_embedding = dim
 
-        self.X = torch.ones(self.num_nodes, self.test_embedding)
+        self.X = torch.ones(
+            (self.num_nodes, self.test_embedding), dtype=torch.float)
         self.W = torch.ones(self.test_embedding, self.output_embedding)
 
         self.result = None
@@ -35,6 +37,7 @@ class Verification(object):
         self.A_blocks = A_blocks
         self.C_blocks = C_blocks
         self.Block_size = Block_size
+        self.pctx_ptr = pctx_ptr
 
     def reference(self, column_index, val, num_nodes):
         '''
@@ -52,9 +55,13 @@ class Verification(object):
         '''
         print("# Compute result on GPU")
         X = self.X.cuda()
+        cu_result, pctx = cuda.cuCtxGetCurrent()
+        check_cu_result('cuCtxCreate', cu_result)
+        pctx_ptr = pctx.getPtr()
+        print('unitest compute python cu_context:', hex(pctx_ptr))
         self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
                                self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
-                               self.sprt_cu_function, self.A_blocks, self.C_blocks, self.Block_size)
+                               self.sprt_cu_function, self.A_blocks, self.C_blocks, self.Block_size, self.pctx_ptr)
         # print(self.result)
 
     def compare(self):

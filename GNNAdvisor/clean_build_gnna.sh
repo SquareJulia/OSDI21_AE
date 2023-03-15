@@ -1,4 +1,4 @@
 cd GNNConv/
 sudo rm -rf build dist GNNAdvisor.egg-info
-python setup.py install
+TORCH_CUDA_ARCH_LIST="7.0" python setup.py clean --all install
 cd ../

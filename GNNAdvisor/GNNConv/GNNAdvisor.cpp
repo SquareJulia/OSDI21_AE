@@ -11,10 +11,11 @@ torch::Tensor SAG_cuda(
     int partSize,
     int dimWorker,
     int warpPerBlock,
-    unsigned long long sprt_cu_function,
+    long long sprt_cu_function,
     int A_blocks,
     int C_blocks,
-    int Block_size);
+    int Block_size,
+    long long pctx_ptr);
 
 std::vector<torch::Tensor> spmm_forward_cuda(
     torch::Tensor input,
@@ -82,10 +83,11 @@ torch::Tensor SAG(
     int partSize,
     int dimWorker,
     int warpPerBlock,
-    unsigned long long sprt_cu_function,
+    long long sprt_cu_function,
     int A_blocks,
     int C_blocks,
-    int Block_size)
+    int Block_size,
+    long long pctx_ptr)
 {
   CHECK_INPUT(input);
   CHECK_INPUT(row_pointers);
@@ -97,7 +99,7 @@ torch::Tensor SAG(
   return SAG_cuda(input, row_pointers, column_index,
                   degrees, part_pointers, part2Node,
                   partSize, dimWorker, warpPerBlock,
-                  sprt_cu_function, A_blocks, C_blocks, Block_size);
+                  sprt_cu_function, A_blocks, C_blocks, Block_size, pctx_ptr);
 }
 
 std::vector<torch::Tensor> spmm_forward(

@@ -122,10 +122,11 @@ torch::Tensor SAG_cuda(
     int partSize,
     int dimWorker,
     int warpPerBlock,
-    unsigned long long sprt_cu_function,
+    long long sprt_cu_function,
     int A_blocks,
     int C_blocks,
-    int Block_size)
+    int Block_size,
+    long long pctx_ptr)
 {
     auto output = torch::zeros_like(input);
 
@@ -156,20 +157,48 @@ torch::Tensor SAG_cuda(
     for (int i = 0; i < PROFILE; i++)
 #endif
 
-        void *args[2] = {&input, &output};
+        printf("pctx:%#llx\n", pctx_ptr);
+    checkCudaErrors(cuCtxSetCurrent(*((CUcontext *)pctx_ptr)));
 
-    // checkCudaErrors(cuLaunchKernel((CUfunction)sprt_cu_function, A_blocks, C_blocks, 1, // Nx1x1 blocks
-    //                                Block_size, 1, 1,                                    // 1x1x1 threads
-    //                                0, 0, args, 0));
+    float **d_BC, **d_AC;
+    float *tmp;
+    cudaMalloc((void **)&d_BC, sizeof(float *));
+    cudaMalloc((void **)&d_AC, sizeof(float *));
+    tmp = (float *)(input.data_ptr());
+    cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice);
+    tmp = (float *)(output.data_ptr());
+    cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice);
+    void *args[2] = {&d_BC, &d_AC};
+
+    // void *input_ptr_h, *output_ptr_h;
+    // input_ptr_h = input.data_ptr();
+    // output_ptr_h = output.data_ptr();
+
+    // CUdeviceptr input_ptr, output_ptr;
+    // checkCudaErrors(cuMemAlloc(&input_ptr, sizeof(input_ptr_h)));
+    // checkCudaErrors(cuMemAlloc(&output_ptr, sizeof(output_ptr_h)));
+    // checkCudaErrors(cuMemcpyHtoD(input_ptr, &input_ptr_h, sizeof(input_ptr_h)));
+    // checkCudaErrors(cuMemcpyHtoD(output_ptr, &output_ptr_h, sizeof(output_ptr_h)));
+    // printf("sizeof(input_ptr_h):%d\n", sizeof(input_ptr_h));
+    // printf("input_ptr:%p, input_ptr_h:%p\noutput_ptr:%p,output_ptr_h:%p\n", input_ptr, input_ptr_h, output_ptr, output_ptr_h);
+    // assert(output.device().is_cuda());
+
+    // void *args[2] = {&(*((CUdeviceptr *)input_ptr)), &(*((CUdeviceptr *)output_ptr))};
     printf("sprt_cu_function: %#llx\n", sprt_cu_function);
-    cudaError_t status = cudaLaunchKernel((void *)sprt_cu_function, dim3(A_blocks, C_blocks, 1U), // Nx1x1 blocks
-                                          dim3(Block_size, 1U, 1U), args,                         // 1x1x1 threads
-                                          0U, nullptr);
-    if (status != cudaSuccess)
-    {
-        printf("CUDA error: %s\n", cudaGetErrorString(status));
-        exit(-1);
-    }
+
+    printf("\nLaunching kernel with A_blocks:%d,C_blocks:%d,Block_size:%d\n", A_blocks, C_blocks, Block_size);
+
+    checkCudaErrors(cuLaunchKernel(*((CUfunction *)sprt_cu_function), A_blocks, C_blocks, 1, // Nx1x1 blocks
+                                   Block_size, 1, 1,                                         // 1x1x1 threads
+                                   0, 0, args, 0));
+    // cudaError_t status = cudaLaunchKernel((void *)sprt_cu_function, dim3(A_blocks, C_blocks, 1U), // Nx1x1 blocks
+    //                                       dim3(Block_size, 1U, 1U), args,                         // 1x1x1 threads
+    //                                       0U, nullptr);
+    // if (status != cudaSuccess)
+    // {
+    //     printf("CUDA error: %s\n", cudaGetErrorString(status));
+    //     exit(-1);
+    // }
     // AT_DISPATCH_FLOATING_TYPES(input.type(), "Scatter_and_Gather", ([&] {
     //                             SAG_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
     //                                 output.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),

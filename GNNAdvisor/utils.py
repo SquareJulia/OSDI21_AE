@@ -12,8 +12,15 @@ def str2cstr(str):
     return b_str
 
 
-def check_cu_result(func_name, cu_result):
-    if cu_result != CUDA_SUCCESS:
-        _, cu_string = cuda.cuGetErrorString(cu_result)
-        print("%s failed with error code %d: %s" %
-              (func_name, cu_result, cu_string))
+
+# from example.common.helper_cuda
+def checkCudaErrors(result):
+    if result[0].value:
+        raise RuntimeError("CUDA error code={}({})".format(
+            result[0].value, _cudaGetErrorEnum(result[0])))
+    if len(result) == 1:
+        return None
+    elif len(result) == 2:
+        return result[1]
+    else:
+        return result[1:]

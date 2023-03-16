@@ -5,12 +5,13 @@ import time
 from tqdm import *
 from torch_sparse import spmm
 from utils import *
+from cuda import cuda
 
 
 class Verification(object):
     def __init__(self, dim, row_pointers, column_index, degrees, partPtr, part2Node,
                  partSize, dimWorker, warpPerBlock,
-                 sprt_cu_function, A_blocks, C_blocks, Block_size, pctx_ptr):
+                 sprt_cubin_file, A_blocks, C_blocks, Block_size):
 
         self.row_pointers = row_pointers
         self.column_index = column_index
@@ -33,11 +34,15 @@ class Verification(object):
         self.result = None
         self.result_ref = None
 
-        self.sprt_cu_function = sprt_cu_function
         self.A_blocks = A_blocks
         self.C_blocks = C_blocks
         self.Block_size = Block_size
-        self.pctx_ptr = pctx_ptr
+        self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
+
+        sprt_module = checkCudaErrors(
+            cuda.cuModuleLoad(str2cstr(sprt_cubin_file)))
+        self.sprt_cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
+            sprt_module, b'_Z2mmPKfPf'))
 
     def reference(self, column_index, val, num_nodes):
         '''
@@ -47,6 +52,12 @@ class Verification(object):
         print("# Compute reference on CPU")
         self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
                                torch.FloatTensor(val), num_nodes, num_nodes, self.X)
+        print('----CPU result:')
+        print(self.result_ref)
+
+        ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
+        ctx_ptr = ctx.getPtr()
+        print('============ unitest reference cu_context:', hex(ctx_ptr))
 
     def compute(self):
         '''
@@ -54,15 +65,16 @@ class Verification(object):
         result on GPU.
         '''
         print("# Compute result on GPU")
+
+        # checkCudaErrors(cuda.cuCtxSetCurrent(self.ctx))
         X = self.X.cuda()
-        cu_result, pctx = cuda.cuCtxGetCurrent()
-        check_cu_result('cuCtxCreate', cu_result)
-        pctx_ptr = pctx.getPtr()
-        print('unitest compute python cu_context:', hex(pctx_ptr))
+        print('----\nunitest X:')
+        print(X)
         self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
                                self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
-                               self.sprt_cu_function, self.A_blocks, self.C_blocks, self.Block_size, self.pctx_ptr)
-        # print(self.result)
+                               self.sprt_cu_function.getPtr(), self.A_blocks, self.C_blocks, self.Block_size, self.ctx.getPtr())
+        print('-----sparsert result:')
+        print(self.result)
 
     def compare(self):
         if self.result_ref is None or self.result is None:

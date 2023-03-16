@@ -288,10 +288,10 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
         " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
     print('---------compile command:')
     print(compile_command)
-    print('LD_LIBRARY_PATH:')
-    print(os.getenv('LD_LIBRARY_PATH'))
-    print('PATH:')
-    print(os.getenv('PATH'))
+    # print('LD_LIBRARY_PATH:')
+    # print(os.getenv('LD_LIBRARY_PATH'))
+    # print('PATH:')
+    # print(os.getenv('PATH'))
     os.system(compile_command)
     # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
     #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")

@@ -114,9 +114,20 @@ START_NONFUSED = """
 
 namespace cg = cooperative_groups;
 
-__global__ void mm(const float * __restrict__ BC, float * AC)
+__global__ void mm(const float ** __restrict__ pBC, float ** pAC)
 {
-	printf("in cubin mm!\\n");
+	const float *BC=*pBC;
+	float *AC=*pAC;
+	if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
+	{
+		printf("Block(0,0)T0 in cubin mm!\\n");
+		for(int row=0;row<B_dim;row++){
+			for(int col=0;col<C_dim;col++){
+				printf("%.2f ",BC[row*C_dim+col]);
+			}
+			printf("\\n");
+		}
+	}
     register float ACC[Ny] = {0.0};
 	register float RC = 0.0;
 #if Gy > 1	
@@ -441,7 +452,7 @@ int main()
 #if RESIDUAL
 	    mm<<<GS,Gsy>>>(d_BC,d_residual,d_AC);
 #else
-        mm<<<GS,Gsy>>>(d_BC,d_AC);
+        mm<<<GS,Gsy>>>(&d_BC,&d_AC);
 #endif
     }
 
@@ -452,7 +463,7 @@ int main()
 #if RESIDUAL
 	    mm<<<GS,Gsy>>>(d_BC,d_residual,d_AC);
 #else
-        mm<<<GS,Gsy>>>(d_BC,d_AC);
+        mm<<<GS,Gsy>>>(&d_BC,&d_AC);
 #endif
     }
 	cudaEventRecord(stop);

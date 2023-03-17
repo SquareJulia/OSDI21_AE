@@ -76,6 +76,7 @@ verify_spmm = args.verify_spmm == 'True'
 assert torch.cuda.is_available()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+torch.set_printoptions(precision=2)
 ####################################
 # loading data from files
 ####################################
@@ -140,6 +141,9 @@ C_dim = args.hidden
 A_blocks = 2  # A_dim=6
 C_blocks = 2
 Gy = 1
+
+remove_all_files_in_dir("../sprt/dist/zsy-test-graphs/*")
+print('deleted old')
 gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
     --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
         --infile {} --outfile {}"\
@@ -223,7 +227,7 @@ if not verify_spmm:
     if verbose_mode:
         print('============ GNNA_main cu_context after compute:',
               hex(pctx_ptr), pctx)
-    valid.reference(dataset.edge_index, dataset.val, dataset.num_nodes)
+    valid.reference(dataset.edge_index, dataset.a_hat, dataset.num_nodes)
     valid.compare()
     sys.exit(0)
 

@@ -196,8 +196,10 @@ torch::Tensor SAG_cuda(
     gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
     gpuErrchk(cudaMalloc((void **)&d_AC, sizeof(float *)));
     tmp = (float *)(input.data_ptr());
+    printf("CPU input_ptr:%p\n", tmp);
     gpuErrchk(cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
     tmp = (float *)(output.data_ptr());
+    printf("CPU output_ptr:%p\n", tmp);
     gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
     void *args[2] = {&d_BC, &d_AC};
 

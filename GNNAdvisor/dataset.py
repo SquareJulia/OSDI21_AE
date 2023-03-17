@@ -4,6 +4,7 @@ import numpy as np
 import time
 import dgl
 import os.path as osp
+import os
 
 from scipy.sparse import *
 import rabbit
@@ -195,6 +196,7 @@ class custom_dataset(torch.nn.Module):
         '''
         if modeBarrier == 0:
             return ''
+        torch.set_printoptions(precision=2)
         if self.verbose_flag:
             print('------save for sparseRT')
             print('=== original A_hat:')
@@ -213,7 +215,10 @@ class custom_dataset(torch.nn.Module):
         if self.verbose_flag:
             print('=== npy path:')
             print(npy_path)
-        np.save(npy_path, self.a_hat.transpose())
+        if os.path.isfile(npy_path):
+            print('deleted old npy')
+            os.remove(npy_path)
+        np.save(npy_path, np.transpose(self.a_hat))
         return npy_path
 
 

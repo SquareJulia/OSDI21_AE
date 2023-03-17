@@ -12,7 +12,7 @@ setup(
             ],
             libraries=['cuda'],
             include_dirs=[
-                "/usr/local/cuda",
+                "/usr/local/cuda/include",
                 "/usr/local/cuda-11.6/targets/x86_64-linux/include"],
             library_dirs=['/usr/local/cuda-11.6/lib64']
         )

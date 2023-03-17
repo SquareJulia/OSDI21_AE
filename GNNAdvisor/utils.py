@@ -1,5 +1,7 @@
 import ctypes
 from cuda import cuda
+import os
+import glob
 
 CUDA_SUCCESS = 0
 
@@ -10,7 +12,6 @@ def str2cstr(str):
     '''
     b_str = str.encode('utf-8')
     return b_str
-
 
 
 # from example.common.helper_cuda
@@ -24,3 +25,9 @@ def checkCudaErrors(result):
         return result[1]
     else:
         return result[1:]
+
+
+def remove_all_files_in_dir(dir):
+    files = glob.glob(dir)
+    for f in files:
+        os.remove(f)

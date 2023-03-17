@@ -42,7 +42,7 @@ class Verification(object):
         sprt_module = checkCudaErrors(
             cuda.cuModuleLoad(str2cstr(sprt_cubin_file)))
         self.sprt_cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
-            sprt_module, b'_Z2mmPKfPf'))
+            sprt_module, b'_Z2mmPPKfPPf'))
 
     def reference(self, column_index, val, num_nodes):
         '''
@@ -50,14 +50,13 @@ class Verification(object):
         result on CPU.
         '''
         print("# Compute reference on CPU")
-        self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
-                               torch.FloatTensor(val), num_nodes, num_nodes, self.X)
+        print(val)
+        print(self.X)
+        # self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
+        #                        torch.FloatTensor(val), num_nodes, num_nodes, self.X)
+        self.result_ref = torch.mm(torch.FloatTensor(val), self.X)
         print('----CPU result:')
         print(self.result_ref)
-
-        ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-        ctx_ptr = ctx.getPtr()
-        print('============ unitest reference cu_context:', hex(ctx_ptr))
 
     def compute(self):
         '''

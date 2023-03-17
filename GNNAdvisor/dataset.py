@@ -196,14 +196,15 @@ class custom_dataset(torch.nn.Module):
         '''
         if modeBarrier == 0:
             return ''
-        torch.set_printoptions(precision=2)
         if self.verbose_flag:
             print('------save for sparseRT')
             print('=== original A_hat:')
+            torch.set_printoptions(precision=2)
             print(self.a_hat)
         self.a_times_d_for_sprt(modeBarrier)
         if self.verbose_flag:
             print('=== after times D:')
+            torch.set_printoptions(precision=2)
             print(self.a_hat)
 
         npy_path = '../sprt/npys/'
@@ -216,7 +217,6 @@ class custom_dataset(torch.nn.Module):
             print('=== npy path:')
             print(npy_path)
         if os.path.isfile(npy_path):
-            print('deleted old npy')
             os.remove(npy_path)
         np.save(npy_path, np.transpose(self.a_hat))
         return npy_path

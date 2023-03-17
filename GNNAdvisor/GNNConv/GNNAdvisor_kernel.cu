@@ -174,51 +174,33 @@ torch::Tensor SAG_cuda(
 
     for (int i = 0; i < PROFILE; i++)
 #endif
-        CUcontext cur_ctx;
-    checkCudaErrors(cuCtxGetCurrent(&cur_ctx));
-    std::cout << "=========== kernel context:" << cur_ctx << std::endl;
+        // CUcontext cur_ctx;
+        // checkCudaErrors(cuCtxGetCurrent(&cur_ctx));
+        // std::cout << "=========== kernel context:" << cur_ctx << std::endl;
 
-    printf("----\ninput array before setCurrent:\n");
-    std::cout << input.device() << std::endl;
-    std::cout << input << std::endl;
-
-    printf("pctx:%#llx\n", pctx_ptr);
-    CUcontext *ctx_ptr = (CUcontext *)pctx_ptr;
+        CUcontext *ctx_ptr = (CUcontext *)pctx_ptr;
     std::cout << "*ctx_ptr:" << *ctx_ptr << std::endl;
     checkCudaErrors(cuCtxSetCurrent(*ctx_ptr));
     CUfunction *func_ptr = (CUfunction *)sprt_cu_function;
-
-    printf("----\ninput array after setCurrent:\n");
-    std::cout << input << std::endl;
 
     float **d_BC, **d_AC;
     float *tmp;
     gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
     gpuErrchk(cudaMalloc((void **)&d_AC, sizeof(float *)));
     tmp = (float *)(input.data_ptr());
-    printf("CPU input_ptr:%p\n", tmp);
     gpuErrchk(cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
     tmp = (float *)(output.data_ptr());
-    printf("CPU output_ptr:%p\n", tmp);
     gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
     void *args[2] = {&d_BC, &d_AC};
-
-    printf("sprt_cu_function: %#llx\n", sprt_cu_function);
 
     printf("\nLaunching kernel with A_blocks:%d,C_blocks:%d,Block_size:%d\n", A_blocks, C_blocks, Block_size);
 
     checkCudaErrors(cuLaunchKernel(*func_ptr, A_blocks, C_blocks, 1, // Nx1x1 blocks
                                    Block_size, 1, 1,                 // 1x1x1 threads
                                    0, 0, args, 0));
-    // cudaError_t status = cudaLaunchKernel((void *)sprt_cu_function, dim3(A_blocks, C_blocks, 1U), // Nx1x1 blocks
-    //                                       dim3(Block_size, 1U, 1U), args,                         // 1x1x1 threads
-    //                                       0U, nullptr);
-    // if (status != cudaSuccess)
-    // {
-    //     printf("CUDA error: %s\n", cudaGetErrorString(status));
-    //     exit(-1);
-    // }
-    // AT_DISPATCH_FLOATING_TYPES(input.type(), "Scatter_and_Gather", ([&] {
+    gpuErrchk(cudaFree((void *)d_BC));
+    gpuErrchk(cudaFree((void *)d_AC));
+    // AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "Scatter_and_Gather", ([&] {
     //                             SAG_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
     //                                 output.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
     //                                 input.packed_accessor32<scalar_t,2,torch::RestrictPtrTraits>(),
@@ -235,8 +217,7 @@ torch::Tensor SAG_cuda(
     //                                 warpPerBlock
     //                             );
     //                         }));
-    // cudaFree((void *)d_BC);
-    // cudaFree((void *)d_AC);
+
 #ifdef PROFILE
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
@@ -248,9 +229,6 @@ torch::Tensor SAG_cuda(
 #endif
 
     cudaDeviceSynchronize();
-
-    printf("----\nprint output array:\n");
-    std::cout << output << std::endl;
 
     return output;
 }
@@ -384,21 +362,21 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     // printf("dimWorker: %d\n", dimWorker);
     // printf("shared_memory: %d\n", tmp.size(0), tmp.size(1));
 
-    AT_DISPATCH_FLOATING_TYPES(input.type(), "spmm_cuda_forward", ([&]
-                                                                   { spmm_forward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
-                                                                         output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                         tmp.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                         row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                         column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                         degrees.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
-                                                                         part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                         part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                         num_nodes,
-                                                                         dim,
-                                                                         num_parts,
-                                                                         partSize,
-                                                                         dimWorker,
-                                                                         warpPerBlock); }));
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "spmm_cuda_forward", ([&]
+                                                                          { spmm_forward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
+                                                                                output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                tmp.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                degrees.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
+                                                                                part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                num_nodes,
+                                                                                dim,
+                                                                                num_parts,
+                                                                                partSize,
+                                                                                dimWorker,
+                                                                                warpPerBlock); }));
 
     cudaError_t error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -538,21 +516,21 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     // const int shared_memory = warpPerBlock * partSize * sizeof(int) + warpPerBlock * dim * sizeof(float);
     int shared_memory = partSize * warpPerBlock * sizeof(int) + warpPerBlock * dim * sizeof(float);
 
-    AT_DISPATCH_FLOATING_TYPES(d_output.type(), "spmm_cuda_backward", ([&]
-                                                                       { spmm_backward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
-                                                                             d_input_prime.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                             d_output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                             row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             degrees.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
-                                                                             part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             num_nodes,
-                                                                             dim,
-                                                                             num_parts,
-                                                                             partSize,
-                                                                             dimWorker,
-                                                                             warpPerBlock); }));
+    AT_DISPATCH_FLOATING_TYPES(d_output.scalar_type(), "spmm_cuda_backward", ([&]
+                                                                              { spmm_backward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
+                                                                                    d_input_prime.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                    d_output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                    row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    degrees.packed_accessor32<float, 1, torch::RestrictPtrTraits>(),
+                                                                                    part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    num_nodes,
+                                                                                    dim,
+                                                                                    num_parts,
+                                                                                    partSize,
+                                                                                    dimWorker,
+                                                                                    warpPerBlock); }));
 
     // check for error
     cudaError_t error = cudaGetLastError();
@@ -681,21 +659,21 @@ std::vector<torch::Tensor> spmm_forward_cuda_gin(
     // printf("dimWorker: %d\n", dimWorker);
     // printf("warpPerBlock: %d, shared_memory: %d\n", warpPerBlock, shared_memory);
 
-    AT_DISPATCH_FLOATING_TYPES(input.type(), "spmm_cuda_forward_gin", ([&]
-                                                                       { spmm_forward_cuda_kernel_gin<scalar_t><<<grid, block, shared_memory>>>(
-                                                                             tmp.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                             input.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                             row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             epsilon,
-                                                                             part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                             num_nodes,
-                                                                             dim,
-                                                                             num_parts,
-                                                                             partSize,
-                                                                             dimWorker,
-                                                                             warpPerBlock); }));
+    AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "spmm_cuda_forward_gin", ([&]
+                                                                              { spmm_forward_cuda_kernel_gin<scalar_t><<<grid, block, shared_memory>>>(
+                                                                                    tmp.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                    input.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                    row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    epsilon,
+                                                                                    part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                    num_nodes,
+                                                                                    dim,
+                                                                                    num_parts,
+                                                                                    partSize,
+                                                                                    dimWorker,
+                                                                                    warpPerBlock); }));
 
     auto output = torch::mm(tmp, weight);
 
@@ -818,21 +796,21 @@ std::vector<torch::Tensor> spmm_backward_cuda_gin(
     const int grid = (num_parts * WARP_SIZE + block - 1) / block;
     int shared_memory = partSize * warpPerBlock * sizeof(int) + warpPerBlock * dim * sizeof(float);
 
-    AT_DISPATCH_FLOATING_TYPES(d_output.type(), "spmm_cuda_backward_gin", ([&]
-                                                                           { spmm_backward_cuda_kernel_gin<scalar_t><<<grid, block, shared_memory>>>(
-                                                                                 d_input.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                 d_input_prime.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
-                                                                                 row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                                 column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                                 epsilon,
-                                                                                 part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                                 part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
-                                                                                 num_nodes,
-                                                                                 dim,
-                                                                                 num_parts,
-                                                                                 partSize,
-                                                                                 dimWorker,
-                                                                                 warpPerBlock); }));
+    AT_DISPATCH_FLOATING_TYPES(d_output.scalar_type(), "spmm_cuda_backward_gin", ([&]
+                                                                                  { spmm_backward_cuda_kernel_gin<scalar_t><<<grid, block, shared_memory>>>(
+                                                                                        d_input.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                        d_input_prime.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
+                                                                                        row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                        column_index.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                        epsilon,
+                                                                                        part_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                        part2Node.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
+                                                                                        num_nodes,
+                                                                                        dim,
+                                                                                        num_parts,
+                                                                                        partSize,
+                                                                                        dimWorker,
+                                                                                        warpPerBlock); }));
 
     cudaError_t error = cudaGetLastError();
     if (error != cudaSuccess)

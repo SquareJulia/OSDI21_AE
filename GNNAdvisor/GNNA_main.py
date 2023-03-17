@@ -134,7 +134,7 @@ if verbose_mode:
 
 print(' ==== sparse Matrix for sparseRT')
 sprt_input_file = dataset.save_for_sprt(inputInfo.modeBarrier)  # .npy
-sprtPtxFile = sprt_input_file.replace('npys', 'dist').replace('.npy', '.ptx')
+sprt_ptx_file = sprt_input_file.replace('npys', 'dist').replace('.npy', '.ptx')
 A_dim = 6
 B_dim = 6
 C_dim = args.hidden
@@ -143,39 +143,21 @@ C_blocks = 2
 Gy = 1
 
 remove_all_files_in_dir("../sprt/dist/zsy-test-graphs/*")
-print('deleted old')
 gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
     --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
         --infile {} --outfile {}"\
-            .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, Gy, sprt_input_file, sprtPtxFile)
+            .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, Gy, sprt_input_file, sprt_ptx_file)
 os.system(gen_ptx_command)
 
-sprt_cubin_file = sprtPtxFile.replace('.ptx', '.cubin')
+sprt_cubin_file = sprt_ptx_file.replace('.ptx', '.cubin')
 gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
-    sprtPtxFile, sprt_cubin_file)
+    sprt_ptx_file, sprt_cubin_file)
 print('generating cubin...')
 print(gen_cubin_command)
 os.system(gen_cubin_command)
 
 Gsy = C_dim//C_blocks
 Block_size = Gy*Gsy
-
-# get context
-# cu_result, pctx = cuda.cuCtxCreate(0, 0)
-pctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-pctx_ptr = pctx.getPtr()
-if verbose_mode:
-    print('============ GNNA_main cu_context before get module:', hex(pctx_ptr), pctx)
-
-# # get module and function handle
-# sprt_module = checkCudaErrors(cuda.cuModuleLoad(str2cstr(sprt_cubin_file)))
-# sprt_cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
-#     sprt_module, b'_Z2mmPKfPf'))
-# sprt_cu_function_ll = sprt_cu_function.getPtr()
-
-# if verbose_mode:
-#     print('sprt_cu_function:', sprt_cu_function)
-#     print('sprt_cu_function_ll:', hex(sprt_cu_function_ll))
 
 
 ####################################
@@ -187,13 +169,6 @@ partPtr, part2Node = GNNA.build_part(
 build_neighbor_parts = time.perf_counter() - start
 if verbose_mode:
     print("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
-
-# get context
-# cu_result, pctx = cuda.cuCtxCreate(0, 0)
-pctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-pctx_ptr = pctx.getPtr()
-if verbose_mode:
-    print('============ GNNA_main cu_context after nb-partitioning:', hex(pctx_ptr))
 
 inputInfo.row_pointers = inputInfo.row_pointers.to(device)
 inputInfo.column_index = inputInfo.column_index.to(device)
@@ -214,19 +189,7 @@ if not verify_spmm:
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock,
                          sprt_cubin_file, A_blocks, C_blocks, Block_size)
-    # get context
-    pctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-    pctx_ptr = pctx.getPtr()
-    if verbose_mode:
-        print(
-            '============ GNNA_main cu_context after creating Verification:', hex(pctx_ptr), pctx)
     valid.compute()
-    # get context
-    pctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-    pctx_ptr = pctx.getPtr()
-    if verbose_mode:
-        print('============ GNNA_main cu_context after compute:',
-              hex(pctx_ptr), pctx)
     valid.reference(dataset.edge_index, dataset.a_hat, dataset.num_nodes)
     valid.compare()
     sys.exit(0)

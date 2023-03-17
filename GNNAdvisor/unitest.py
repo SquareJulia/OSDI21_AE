@@ -50,8 +50,6 @@ class Verification(object):
         result on CPU.
         '''
         print("# Compute reference on CPU")
-        print(val)
-        print(self.X)
         # self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
         #                        torch.FloatTensor(val), num_nodes, num_nodes, self.X)
         self.result_ref = torch.mm(torch.FloatTensor(val), self.X)
@@ -65,7 +63,6 @@ class Verification(object):
         '''
         print("# Compute result on GPU")
 
-        # checkCudaErrors(cuda.cuCtxSetCurrent(self.ctx))
         X = self.X.cuda()
         print('----\nunitest X:')
         print(X)

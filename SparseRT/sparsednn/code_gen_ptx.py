@@ -76,8 +76,8 @@ mov.u32 temp_reg, MULT;
 fma.rn.f16x2  DEST, load_reg, temp_reg, virg_reg;"""
 
 
-def emit_load_block_ptx(B_idx, block, ADDR):
-    new_block = block.replace("ADDR", str(ADDR)).replace(
+def emit_load_block_ptx(B_idx, block):
+    new_block = block.replace("ADDR", 'BC').replace(
         "OFFSET", str(B_idx * C_dim * 4))
     return new_block
 
@@ -133,7 +133,7 @@ def generate_cuda_stem(block, NY, GY=None):
     return program
 
 
-def generate_from_B(Ny_indices, B_indices, BA, block, NY, reg_names, ADDR, GY=None, A_offset=None):
+def generate_from_B(Ny_indices, B_indices, BA, block, NY, reg_names,  GY=None, A_offset=None):
 
     ptxs = []
 
@@ -157,10 +157,10 @@ def generate_from_B(Ny_indices, B_indices, BA, block, NY, reg_names, ADDR, GY=No
             if b_idx != old_b_idx:
                 if HALF:
                     load_block_ptx = emit_load_block_ptx(
-                        b_idx, LOAD_CACHE_PTX_HALF, ADDR)
+                        b_idx, LOAD_CACHE_PTX_HALF)
                 else:
                     load_block_ptx = emit_load_block_ptx(
-                        b_idx, LOAD_CACHE_PTX, ADDR)
+                        b_idx, LOAD_CACHE_PTX)
                 ptx += load_block_ptx
                 old_b_idx = b_idx
 
@@ -185,6 +185,8 @@ def get_idx_balanced(block, BA, A_offset, block_NY, GY=None):
 
     Ny_indices = [[] for i in range(GY)]
     B_indices = [[] for i in range(GY)]
+    print('in get_idx_balanced,BA:')
+    print(BA)
     nnz = np.sum(np.abs(BA[:, A_offset:A_offset + block_NY]) > EPS)
     nnz_per_group = nnz // GY
     curr_group = 0
@@ -296,7 +298,7 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
     # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
     #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
     os.sync()
-    reg_names, addresses = parse_ptx(temp_ptx_file_name, A_blocks)
+    reg_names, BC_pp_global = parse_ptx(temp_ptx_file_name, A_blocks)
     # print(reg_names)
     ptxs = []
     for block in range(A_blocks):
@@ -307,13 +309,13 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
             block, BA, A_offset, block_NY, GY=GY)
 
         block_ptxs = generate_from_B(
-            Ny_indices, B_indices, BA, block, NY, reg_names, addresses[block], GY=GY, A_offset=A_offset)
+            Ny_indices, B_indices, BA, block, NY, reg_names, GY=GY, A_offset=A_offset)
         ptxs.append(block_ptxs)
 
     if RESIDUAL or NO_RELU:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
     else:
-        insert_ptx(temp_ptx_file_name, outfile, ptxs)
+        insert_ptx(temp_ptx_file_name, outfile, ptxs, BC_pp_global)
 
 #GX = 191
 

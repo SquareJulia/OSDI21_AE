@@ -19,5 +19,5 @@ osdi-ae-graphs-mtx.tar.gz
 cmake-3.16.5
 *__pycache__*
 sprt/dist/*/*
-sprt/temp*
 GNNAdvisor/error.txt
+sprt/temp*

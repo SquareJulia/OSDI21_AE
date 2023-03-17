@@ -116,14 +116,13 @@ namespace cg = cooperative_groups;
 
 __global__ void mm(const float ** __restrict__ pBC, float ** pAC)
 {
-	const float *BC=*pBC;
-	float *AC=*pAC;
 	if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
 	{
-		printf("Block(0,0)T0 in cubin mm!\\n");
+		printf("Block(0,0) T0 in cubin mm!\\n");
+		printf("pBC:%p, *pBC:%p, pAC:%p, *pAC:%p\\n",pBC,*pBC,pAC,*pAC);
 		for(int row=0;row<B_dim;row++){
 			for(int col=0;col<C_dim;col++){
-				printf("%.2f ",BC[row*C_dim+col]);
+				printf("%.2f ",((const float*)*pBC)[row*C_dim+col]);
 			}
 			printf("\\n");
 		}
@@ -219,7 +218,7 @@ START_FUSED = """
 #include <time.h>
 #include <cuda_profiler_api.h>
 #include <cooperative_groups.h>
-// we are doing AC = AB * BC, reduce across the B dimension
+// we are doing AC = AB * z, reduce across the B dimension
 // binding B to the x dimension, A to the y dimension and C to the z dimension
 
 #define Tsy 1
@@ -259,7 +258,7 @@ __global__ void mm(const float * __restrict__ BC, float * AC)
 """
 
 GEN_LOAD = """
-RC = BC[0 + C_offset + lane];
+RC = ((const float *)*pBC)[0 + C_offset + lane];
 """
 
 GEN_LOAD_STRIDE = """
@@ -316,7 +315,7 @@ BLOCK_END_NHWC = """
 	    #pragma unroll
 	    for(int i = lane; i < Ny; i+= Gsy)
 	    {
-            AC[(C_offset + j) * A_dim + A_offset + i] = smem_result[j][i];
+            (*pAC)[(C_offset + j) * A_dim + A_offset + i] = smem_result[j][i];
         }
     
     }
@@ -328,19 +327,19 @@ BLOCK_END_NHWC = """
 """
 
 BLOCK_END_REDUCTION_NO_RELU = """
-        AC[OFFSET + C_offset  + lane] = ACC[IDX] + BIASf;
+        (*pAC)[OFFSET + C_offset  + lane] = ACC[IDX] + BIASf;
 """
 
 BLOCK_END_REDUCTION = """
-        AC[OFFSET + C_offset  + lane] = max(ACC[IDX] + BIASf,0.0f);
+        (*pAC)[OFFSET + C_offset  + lane] = max(ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END_REDUCTION_RESIDUAL = """
-        AC[OFFSET + C_offset  + lane] = residual[OFFSET + C_offset  + lane] + max(ACC[IDX] + BIASf,0.0f);
+        (*pAC)[OFFSET + C_offset  + lane] = residual[OFFSET + C_offset  + lane] + max(ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END_REDUCTION_RESIDUAL_2 = """
-        AC[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
+        (*pAC)[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END = """
@@ -349,8 +348,7 @@ BLOCK_END = """
     for(int i = 0; i < Ny; i++)
 	{
     
-        AC[(A_offset + i) * C_dim + C_offset + lane] = ACC[i];
-
+        (*pAC)[(A_offset + i) * C_dim + C_offset + lane] = ACC[i];
     }
     
 #else
@@ -365,8 +363,8 @@ BLOCK_END = """
 	{
 		int row = i / Tsz;
 		int col = i % Tsz;
-		//AC[A_offset + row][C_offset + col] = result[row][col];
-		AC[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
+		//(*pAC)[A_offset + row][C_offset + col] = result[row][col];
+		(*pAC)[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
 	}
 #endif       
        
@@ -378,7 +376,7 @@ BLOCK_END_RESIDUAL = """
     for(int i = 0; i < Ny; i++)
 	{
     
-        AC[(A_offset + i) * C_dim + C_offset + lane] = residual[(A_offset + i) * C_dim + C_offset + lane] + ACC[i];
+        (*pAC)[(A_offset + i) * C_dim + C_offset + lane] = residual[(A_offset + i) * C_dim + C_offset + lane] + ACC[i];
 
     }
     
@@ -398,15 +396,25 @@ BLOCK_END_RESIDUAL = """
 	{
 		int row = i / Tsz;
 		int col = i % Tsz;
-		//AC[A_offset + row][C_offset + col] = result[row][col];
-		AC[(A_offset + row) * C_dim + C_offset + col] += result[row][col];
+		//(*pAC)[A_offset + row][C_offset + col] = result[row][col];
+		(*pAC)[(A_offset + row) * C_dim + C_offset + col] += result[row][col];
 	}
 #endif       
        
 """
 
 END_NONFUSED = """
- 
+    __syncthreads();
+    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
+	{
+		printf("print AC in cubin!!\\n");
+		for(int row=0; row<A_dim;row++){
+			for(int col=0; col<C_dim;col++){
+				printf("%.2f ",((float*)*pAC)[row*C_dim+col]);
+			}
+			printf("\\n");
+		}
+	}
 }
 int main()
 {
@@ -428,7 +436,7 @@ int main()
 #endif
     cnpy::NpyArray arr2 = cnpy::npy_load("ref.npy");
 	float * AC = arr2.data<float>();
-    std::cout << AC[0] << std::endl;
+    std::cout << ((float *)AC)[0] << std::endl;
 
 	float *d_BC, *d_AC, *d_residual;
 	cudaMalloc((void**)&d_BC, B_dim * C_dim *sizeof(float));
@@ -480,7 +488,7 @@ int main()
 	float error = 0;
 	for(int i = 0 ; i < A_dim * C_dim; i ++)
 	{
-        error += abs(result[i] - AC[i]);
+        error += abs(result[i] - ((float *)AC)[i]);
 	}
 	
 	#if Out_Format == 'NCHW'

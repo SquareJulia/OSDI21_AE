@@ -143,10 +143,11 @@ if not osp.exists(sprt_dist_file_dir):
     os.makedirs(sprt_dist_file_dir)
 else:
     remove_files_if_exists(sprt_ptx_file, sprt_cubin_file)
-A_dim = 6
-B_dim = 6
+A_dim = num_nodes
+B_dim = num_nodes
 C_dim = args.hidden
-A_blocks = 2  # A_dim=6
+# A_blocks = 677  # A_dim=6
+A_blocks = 2
 C_blocks = 2
 Gy = 1
 
@@ -156,7 +157,9 @@ gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_d
         --infile {} --outfile {}"\
             .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, Gy, sprt_input_file, sprt_ptx_file)
 os.system(gen_ptx_command)
-
+if not osp.exists(sprt_ptx_file):
+    print('Failed to generate ptx!')
+    exit(0)
 
 gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
     sprt_ptx_file, sprt_cubin_file)

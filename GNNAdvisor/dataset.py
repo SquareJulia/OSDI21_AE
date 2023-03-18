@@ -111,8 +111,8 @@ class custom_dataset(torch.nn.Module):
             print("# avg_edgeSpan: {}".format(int(self.avg_edgeSpan)))
 
         # plus Identity matrix
-        src_li = src_li+[i for i in range(self.num_nodes)]
-        dst_li = dst_li+[i for i in range(self.num_nodes)]
+        src_li = np.concatenate((src_li, [i for i in range(self.num_nodes)]))
+        dst_li = np.concatenate((dst_li, [i for i in range(self.num_nodes)]))
         self.edge_index = np.stack([src_li, dst_li])
         self.num_edges += self.num_nodes
 

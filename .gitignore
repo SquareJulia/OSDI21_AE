@@ -20,4 +20,4 @@ cmake-3.16.5
 *__pycache__*
 sprt/dist/*/*
 GNNAdvisor/error.txt
-sprt/temp*
+SparseRT/materials/*

@@ -116,13 +116,10 @@ namespace cg = cooperative_groups;
 
 __global__ void mm(const float ** __restrict__ pBC, float ** pAC)
 {
-	if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
-	{
-		printf("In cubin mm!\\n");
-		printf("pBC:%p, *pBC:%p, pAC:%p, *pAC:%p\\n",pBC,*pBC,pAC,*pAC);
-	}
     register float ACC[Ny] = {0.0};
 	register float RC = 0.0;
+	const float *const BC = *pBC;
+	float *const AC = *pAC;
 #if Gy > 1	
         __shared__ float result[Ny][Tsz];
 	for(int i = threadIdx.x; i < Ny * Tsz; i += Block_size)
@@ -252,7 +249,7 @@ __global__ void mm(const float * __restrict__ BC, float * AC)
 """
 
 GEN_LOAD = """
-RC = ((const float *)*pBC)[0 + C_offset + lane];
+RC = BC[0 + C_offset + lane];
 """
 
 GEN_LOAD_STRIDE = """
@@ -309,7 +306,7 @@ BLOCK_END_NHWC = """
 	    #pragma unroll
 	    for(int i = lane; i < Ny; i+= Gsy)
 	    {
-            (*pAC)[(C_offset + j) * A_dim + A_offset + i] = smem_result[j][i];
+            AC[(C_offset + j) * A_dim + A_offset + i] = smem_result[j][i];
         }
     
     }
@@ -321,19 +318,19 @@ BLOCK_END_NHWC = """
 """
 
 BLOCK_END_REDUCTION_NO_RELU = """
-        (*pAC)[OFFSET + C_offset  + lane] = ACC[IDX] + BIASf;
+        AC[OFFSET + C_offset  + lane] = ACC[IDX] + BIASf;
 """
 
 BLOCK_END_REDUCTION = """
-        (*pAC)[OFFSET + C_offset  + lane] = max(ACC[IDX] + BIASf,0.0f);
+        AC[OFFSET + C_offset  + lane] = max(ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END_REDUCTION_RESIDUAL = """
-        (*pAC)[OFFSET + C_offset  + lane] = residual[OFFSET + C_offset  + lane] + max(ACC[IDX] + BIASf,0.0f);
+        AC[OFFSET + C_offset  + lane] = residual[OFFSET + C_offset  + lane] + max(ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END_REDUCTION_RESIDUAL_2 = """
-        (*pAC)[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
+        AC[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
 """
 
 BLOCK_END = """
@@ -341,8 +338,7 @@ BLOCK_END = """
 #if Gy == 1
     for(int i = 0; i < Ny; i++)
 	{
-    
-        (*pAC)[(A_offset + i) * C_dim + C_offset + lane] = ACC[i];
+        AC[(A_offset + i) * C_dim + C_offset + lane] = ACC[i];
     }
     
 #else
@@ -357,8 +353,8 @@ BLOCK_END = """
 	{
 		int row = i / Tsz;
 		int col = i % Tsz;
-		//(*pAC)[A_offset + row][C_offset + col] = result[row][col];
-		(*pAC)[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
+		//AC[A_offset + row][C_offset + col] = result[row][col];
+		AC[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
 	}
 #endif       
        
@@ -370,7 +366,7 @@ BLOCK_END_RESIDUAL = """
     for(int i = 0; i < Ny; i++)
 	{
     
-        (*pAC)[(A_offset + i) * C_dim + C_offset + lane] = residual[(A_offset + i) * C_dim + C_offset + lane] + ACC[i];
+        AC[(A_offset + i) * C_dim + C_offset + lane] = residual[(A_offset + i) * C_dim + C_offset + lane] + ACC[i];
 
     }
     
@@ -390,8 +386,8 @@ BLOCK_END_RESIDUAL = """
 	{
 		int row = i / Tsz;
 		int col = i % Tsz;
-		//(*pAC)[A_offset + row][C_offset + col] = result[row][col];
-		(*pAC)[(A_offset + row) * C_dim + C_offset + col] += result[row][col];
+		//AC[A_offset + row][C_offset + col] = result[row][col];
+		AC[(A_offset + row) * C_dim + C_offset + col] += result[row][col];
 	}
 #endif       
        

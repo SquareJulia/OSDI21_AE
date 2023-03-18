@@ -5,28 +5,9 @@ from utils import half_to_hex
 
 def parse_ptx(filename, A_blocks):
     ptx = open(filename, "r").readlines()
-    # find BC** => BC* register
-    BC_pp_global = ''
-    for line_num in range(len(ptx)):
-        if 'param_0' in ptx[line_num] and 'ld.param.u64' in ptx[line_num]:
-            # from 'ld.param.u64 	%rd9, [_Z2mmPPKfPPf_param_0];'
-            # grep '%rd9'
-            BC_pp = ptx[line_num].split()[1][:-1]
-            for line_num_ in range(line_num+1, len(ptx)):
-                if 'cvta.to.global.u64' in ptx[line_num_] and BC_pp in ptx[line_num_]:
-                    # from 'cvta.to.global.u64 	%rd2, %rd9;'
-                    # grep '%rd2'
-                    BC_pp_global = ptx[line_num_].split()[1][:-1]
-                    break
-                line_num_ += 1
-            break
-    if BC_pp_global == '':
-        print("Failed to detect global register for **BC.")
-        raise Exception()
-
     # deal with B_G_
     reg_names = []
-    # global_address_names = []
+    global_address_names = []
     #saved_global_address_name = None
     for block in range(A_blocks):
         block_reg_names = []
@@ -41,24 +22,23 @@ def parse_ptx(filename, A_blocks):
                             int(register_name.replace("%f", "")))
                     if "END" in ptx[line_num+j]:
                         break
-                # print(line_num)
-                # global_address_name = None
-                # for j in range(2,10000):
-                #     if "ld.global" in ptx[line_num + j]:
-                #         if "+" in ptx[line_num + j]:
-                #             global_address_name = ptx[line_num+j].split("[")[1].split("+")[0]
-                #         else:
-                #             global_address_name = ptx[line_num+j].split("[")[1].split("]")[0]
-                #         break
-                # if global_address_name is None:
-                #     print("Can't detect global address register name.")
-                #     raise Exception
-                # print(global_address_name)
-                # global_address_names.append(global_address_name)
+                global_address_name = None
+                for j in range(2, 10000):
+                    if "ld.f32" in ptx[line_num + j]:
+                        if "+" in ptx[line_num + j]:
+                            global_address_name = ptx[line_num +
+                                                      j].split("[")[1].split("+")[0]
+                        else:
+                            global_address_name = ptx[line_num +
+                                                      j].split("[")[1].split("]")[0]
+                        break
+                if global_address_name is None:
+                    print("Can't detect global address register name.")
+                    raise Exception
+                global_address_names.append(global_address_name)
                 reg_names.append(block_reg_names)
 
-    # print(reg_names)
-    return reg_names, BC_pp_global
+    return reg_names, global_address_names
 
 
 HALF_BIAS_RELU_BB = """
@@ -78,7 +58,7 @@ def hex_to_float(hex):
     return struct.unpack('!f', bytes.fromhex(hex))[0]
 
 
-def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, BC_pp_global, relu=True, blurb=None, id=None):
+def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, relu=True, blurb=None, id=None):
     ptx_code = open(in_ptx_file, "r").readlines()
     new_file = open(out_ptx_file, "w")
     i = 0
@@ -112,7 +92,7 @@ def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, BC_pp_global, relu=True, b
             new_file.write(line)
 
             for j in range(i+2, len(ptx_code)):
-                if "ld.global" in ptx_code[j]:
+                if "ld.f32" in ptx_code[j]:
                     break
                 else:
                     new_file.write(ptx_code[j])
@@ -159,13 +139,6 @@ def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, BC_pp_global, relu=True, b
             else:
                 new_file.write(HALF_BIAS_BB.replace("SOURCE", SOURCE).replace(
                     "DEST", DEST).replace("BIAS", BIAS))
-            i += 1
-        elif 'cvta.to.global.u64' in line and 'cvta.to.global.u64' in ptx_code[i+1]:
-            new_file.write(line)
-            new_file.write(ptx_code[i+1])
-            new_file.write('\t.reg .b64 BC;\n\t')
-            new_file.write(
-                '\tld.global.u64  BC, [{}];\n\t'.format(BC_pp_global))
             i += 1
         else:
             new_file.write(line)

@@ -27,7 +27,9 @@ class Verification(object):
         self.test_embedding = dim
         self.output_embedding = dim
 
-        self.X = torch.ones(
+        # self.X = torch.ones(
+        #     (self.num_nodes, self.test_embedding), dtype=torch.float)
+        self.X = torch.rand(
             (self.num_nodes, self.test_embedding), dtype=torch.float)
         self.W = torch.ones(self.test_embedding, self.output_embedding)
 
@@ -53,8 +55,8 @@ class Verification(object):
         # self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
         #                        torch.FloatTensor(val), num_nodes, num_nodes, self.X)
         self.result_ref = torch.mm(torch.FloatTensor(val), self.X)
-        print('----CPU result:')
-        print(self.result_ref)
+        # print('----CPU result:')
+        # print(self.result_ref)
 
     def compute(self):
         '''
@@ -64,13 +66,13 @@ class Verification(object):
         print("# Compute result on GPU")
 
         X = self.X.cuda()
-        print('----\nunitest X:')
-        print(X)
+        # print('----\nunitest X:')
+        # print(X)
         self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
                                self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
                                self.sprt_cu_function.getPtr(), self.A_blocks, self.C_blocks, self.Block_size, self.ctx.getPtr())
-        print('-----sparsert result:')
-        print(self.result)
+        # print('-----sparsert result:')
+        # print(self.result)
 
     def compare(self):
         if self.result_ref is None or self.result is None:

@@ -40,7 +40,7 @@ dataset = [
         # ( 'soc-BlogCatalog'	       	 , 128  , 39), 
         # ( 'amazon0601'  	         , 96	, 22), 
 ]
-dataDir='../zsy-test-graphs'
+dataDir='../my-test-graphs'
 
 for partsize in partsize_li:
     for hid in hidden:

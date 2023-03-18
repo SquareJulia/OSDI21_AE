@@ -27,7 +27,7 @@ def checkCudaErrors(result):
         return result[1:]
 
 
-def remove_all_files_in_dir(dir):
-    files = glob.glob(dir)
+def remove_files_if_exists(*files):
     for f in files:
-        os.remove(f)
+        if os.path.isfile(f):
+            os.remove(f)

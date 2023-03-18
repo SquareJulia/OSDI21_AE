@@ -134,7 +134,15 @@ if verbose_mode:
 
 print(' ==== sparse Matrix for sparseRT')
 sprt_input_file = dataset.save_for_sprt(inputInfo.modeBarrier)  # .npy
-sprt_ptx_file = sprt_input_file.replace('npys', 'dist').replace('.npy', '.ptx')
+sprt_dist_without_suffix = sprt_input_file.replace(
+    'npys', 'dist').split('.npy')[0]
+sprt_ptx_file = '{}.ptx'.format(sprt_dist_without_suffix)
+sprt_cubin_file = '{}.cubin'.format(sprt_dist_without_suffix)
+sprt_dist_file_dir = osp.dirname(sprt_ptx_file)
+if not osp.exists(sprt_dist_file_dir):
+    os.makedirs(sprt_dist_file_dir)
+else:
+    remove_files_if_exists(sprt_ptx_file, sprt_cubin_file)
 A_dim = 6
 B_dim = 6
 C_dim = args.hidden
@@ -142,14 +150,14 @@ A_blocks = 2  # A_dim=6
 C_blocks = 2
 Gy = 1
 
-remove_all_files_in_dir("../sprt/dist/zsy-test-graphs/*")
+
 gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
     --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
         --infile {} --outfile {}"\
             .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, Gy, sprt_input_file, sprt_ptx_file)
 os.system(gen_ptx_command)
 
-sprt_cubin_file = sprt_ptx_file.replace('.ptx', '.cubin')
+
 gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
     sprt_ptx_file, sprt_cubin_file)
 print('generating cubin...')

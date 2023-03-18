@@ -8,6 +8,7 @@ import os
 
 from scipy.sparse import *
 import rabbit
+from constants import SPARSERT_MATERIALS_NPYS_DIR, SPARSERT_MATERIALS_DIST_DIR
 
 
 def func(x):
@@ -207,17 +208,18 @@ class custom_dataset(torch.nn.Module):
             torch.set_printoptions(precision=2)
             print(self.a_hat)
 
-        npy_path = '../sprt/npys/'
-        if self.path.startswith('../'):  # only osdi-ae-graphs/zsy-test-graphs
-            npy_path += self.path.split('../')[1].split('.')[0]
-        else:
-            npy_path += self.path.split('/')[-1].split('.')[0]
-        npy_path += '.npy'
+        npy_dir = '{}{}'.format(
+            SPARSERT_MATERIALS_NPYS_DIR, osp.dirname(self.path).split('../')[1])
+        if not osp.exists(npy_dir):
+            os.makedirs(npy_dir)
+        npy_basename = '{}.npy'.format(osp.basename(self.path).split('.')[0])
+        npy_path = osp.join(npy_dir, npy_basename)
+        if os.path.isfile(npy_path):
+            os.remove(npy_path)
+
         if self.verbose_flag:
             print('=== npy path:')
             print(npy_path)
-        if os.path.isfile(npy_path):
-            os.remove(npy_path)
         np.save(npy_path, np.transpose(self.a_hat))
         return npy_path
 

@@ -12,10 +12,8 @@ def parse_ptx(filename, A_blocks):
             # from 'ld.param.u64 	%rd9, [_Z2mmPPKfPPf_param_0];'
             # grep '%rd9'
             BC_pp = ptx[line_num].split()[1][:-1]
-            print('found param_0 ', BC_pp)
             for line_num_ in range(line_num+1, len(ptx)):
                 if 'cvta.to.global.u64' in ptx[line_num_] and BC_pp in ptx[line_num_]:
-                    print('found cvta below param_0')
                     # from 'cvta.to.global.u64 	%rd2, %rd9;'
                     # grep '%rd2'
                     BC_pp_global = ptx[line_num_].split()[1][:-1]
@@ -163,7 +161,6 @@ def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, BC_pp_global, relu=True, b
                     "DEST", DEST).replace("BIAS", BIAS))
             i += 1
         elif 'cvta.to.global.u64' in line and 'cvta.to.global.u64' in ptx_code[i+1]:
-            print('found cvta')
             new_file.write(line)
             new_file.write(ptx_code[i+1])
             new_file.write('\t.reg .b64 BC;\n\t')

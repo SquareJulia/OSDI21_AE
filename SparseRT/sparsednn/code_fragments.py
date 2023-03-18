@@ -118,14 +118,8 @@ __global__ void mm(const float ** __restrict__ pBC, float ** pAC)
 {
 	if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
 	{
-		printf("Block(0,0) T0 in cubin mm!\\n");
+		printf("In cubin mm!\\n");
 		printf("pBC:%p, *pBC:%p, pAC:%p, *pAC:%p\\n",pBC,*pBC,pAC,*pAC);
-		for(int row=0;row<B_dim;row++){
-			for(int col=0;col<C_dim;col++){
-				printf("%.2f ",((const float*)*pBC)[row*C_dim+col]);
-			}
-			printf("\\n");
-		}
 	}
     register float ACC[Ny] = {0.0};
 	register float RC = 0.0;
@@ -404,17 +398,6 @@ BLOCK_END_RESIDUAL = """
 """
 
 END_NONFUSED = """
-    __syncthreads();
-    if (blockIdx.x == 0 && blockIdx.y == 0 && threadIdx.x == 0)
-	{
-		printf("print AC in cubin!!\\n");
-		for(int row=0; row<A_dim;row++){
-			for(int col=0; col<C_dim;col++){
-				printf("%.2f ",((float*)*pAC)[row*C_dim+col]);
-			}
-			printf("\\n");
-		}
-	}
 }
 int main()
 {

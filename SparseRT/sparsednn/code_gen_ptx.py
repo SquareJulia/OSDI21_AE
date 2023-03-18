@@ -40,8 +40,6 @@ input_file = args.infile
 input_file_bias = args.infile_bias
 outfile = args.outfile
 BA = np.load(input_file)
-print('BA:')
-print(BA)
 if input_file_bias:
     bias = np.load(input_file_bias)
 print(BA.shape)
@@ -185,8 +183,6 @@ def get_idx_balanced(block, BA, A_offset, block_NY, GY=None):
 
     Ny_indices = [[] for i in range(GY)]
     B_indices = [[] for i in range(GY)]
-    print('in get_idx_balanced,BA:')
-    print(BA)
     nnz = np.sum(np.abs(BA[:, A_offset:A_offset + block_NY]) > EPS)
     nnz_per_group = nnz // GY
     curr_group = 0
@@ -280,8 +276,8 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
             "B_dim", str(B_dim)).replace("AB_sparse_tidy.npy", name)
 
     token = str(random.random())[2:5]
-    temp_cu_file_name = "../sprt/temp_stub" + token + ".cu"
-    temp_ptx_file_name = "../sprt/temp_stub" + token + ".ptx"
+    temp_cu_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".cu"
+    temp_ptx_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".ptx"
 
     open(temp_cu_file_name, "w").write(program)
     # TODO: absolute for myself

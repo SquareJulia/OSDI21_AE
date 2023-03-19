@@ -17,6 +17,7 @@ from cuda import cuda, nvrtc
 from utils import *
 import ctypes
 from sparsert import SparseRTLayer
+import log
 
 
 parser = argparse.ArgumentParser()
@@ -141,8 +142,13 @@ hiddenLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
                                 inputInfo.outputDim_hidden, inputInfo.C_blocks_hidden, verbose_mode)
 
 inputLayerSpRT.gen_ptx_and_cubin()
+inputLayerSpRT.get_func_handle()
 hiddenLayerSpRT.gen_ptx_and_cubin()
+hiddenLayerSpRT.get_func_handle()
 
+if verbose_mode:
+    log.done('Finished preparations for SparseRT.')
+    print('----------------------------')
 ####################################
 # Building neighbor partitioning.
 ####################################
@@ -151,7 +157,7 @@ partPtr, part2Node = GNNA.build_part(
     inputInfo.partSize, inputInfo.row_pointers)
 build_neighbor_parts = time.perf_counter() - start
 if verbose_mode:
-    print("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
+    log.done("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
 
 inputInfo.row_pointers = inputInfo.row_pointers.to(device)
 inputInfo.column_index = inputInfo.column_index.to(device)
@@ -171,7 +177,7 @@ if not verify_spmm:
                          inputInfo.row_pointers, inputInfo.column_index, degrees,
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock,
-                         inputLayerSpRT.cubin_file, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size)
+                         inputLayerSpRT.cu_function, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size, inputLayerSpRT.ctx)
     valid.compute()
     valid.reference(dataset.edge_index, dataset.a_hat, dataset.num_nodes)
     valid.compare()

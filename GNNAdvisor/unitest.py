@@ -4,14 +4,15 @@ import GNNAdvisor as GNNA
 import time
 from tqdm import *
 from torch_sparse import spmm
-from utils import *
+
 from cuda import cuda
+import log
 
 
 class Verification(object):
     def __init__(self, dim, row_pointers, column_index, degrees, partPtr, part2Node,
                  partSize, dimWorker, warpPerBlock,
-                 sprt_cubin_file, A_blocks, C_blocks, Block_size):
+                 sprt_cu_function, A_blocks, C_blocks, Block_size, ctx):
 
         self.row_pointers = row_pointers
         self.column_index = column_index
@@ -39,19 +40,15 @@ class Verification(object):
         self.A_blocks = A_blocks
         self.C_blocks = C_blocks
         self.Block_size = Block_size
-        self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
-
-        sprt_module = checkCudaErrors(
-            cuda.cuModuleLoad(str2cstr(sprt_cubin_file)))
-        self.sprt_cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
-            sprt_module, b'_Z2mmPPKfPPf'))
+        self.ctx = ctx
+        self.sprt_cu_function = sprt_cu_function
 
     def reference(self, column_index, val, num_nodes):
         '''
         Compute reference SpMM (neighbor aggregation)
         result on CPU.
         '''
-        print("# Compute reference on CPU")
+        log.info("# Compute reference on CPU")
         # self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
         #                        torch.FloatTensor(val), num_nodes, num_nodes, self.X)
         self.result_ref = torch.mm(torch.FloatTensor(val), self.X)
@@ -83,9 +80,9 @@ class Verification(object):
         correct = torch.sum(equs)
         print(1 - correct/self.result_ref.numel())
         if (1 - correct/self.result_ref.numel()) < 1e-4:
-            print("# Verification PASSED")
+            log.done("# Verification PASSED")
         else:
-            print("# Verification FAILED")
+            log.fail("# Verification FAILED")
 
     def profile_spmm(self, round=1):
         X = self.X.cuda()

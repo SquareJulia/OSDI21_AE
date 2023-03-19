@@ -9,6 +9,7 @@ import os
 from scipy.sparse import *
 import rabbit
 from constants import SPARSERT_MATERIALS_NPYS_DIR, SPARSERT_MATERIALS_DIST_DIR
+import log
 
 
 def func(x):
@@ -138,22 +139,22 @@ class custom_dataset(torch.nn.Module):
         If the decider set this reorder flag,
         then reorder and rebuild a graph CSR.
         otherwise skipped this reorder routine.
-        Called from external
+        Called from external.
         '''
         if not self.reorder_flag:
             if self.verbose_flag:
-                print("Reorder flag is not set. Skipped...")
+                log.info("Reorder flag is not set. Skipped...")
         else:
             if self.verbose_flag:
-                print("Reorder flag is set. Continue...")
-                print("Original edge_index\n", self.edge_index)
+                log.info("Reorder flag is set. Continue...")
+                print("Original edge_index:\n", self.edge_index)
             start = time.perf_counter()
             self.edge_index = rabbit.reorder(torch.IntTensor(self.edge_index))
             reorder_time = time.perf_counter() - start
 
             if self.verbose_flag:
-                print("# Reorder time (s): {}".format(reorder_time))
-                print("Reordered edge_index\n", self.edge_index)
+                log.done("# Reorder time (s): {}".format(reorder_time))
+                print("Reordered edge_index:\n", self.edge_index)
 
             self.generate_csr_and_degrees()
 
@@ -198,7 +199,7 @@ class custom_dataset(torch.nn.Module):
         if modeBarrier == 0:
             return ''
         if self.verbose_flag:
-            print('# Save transposed A^(i.e.D^A^D^) for sparseRT')
+            log.info('# Saving transposed A^(i.e.D^A^D^) for sparseRT')
             print('=== original A^:')
             torch.set_printoptions(precision=2)
             print(self.a_hat)
@@ -219,7 +220,7 @@ class custom_dataset(torch.nn.Module):
 
         np.save(npy_path, np.transpose(self.a_hat))
         if self.verbose_flag:
-            print('transposed A^ saved at:{}'.format(npy_path))
+            log.done('transposed A^ saved at:{}'.format(npy_path))
         return npy_path
 
 

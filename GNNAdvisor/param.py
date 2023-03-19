@@ -1,5 +1,6 @@
 import math
 from utils import factors, first_ge
+import log
 
 # package of input parameters
 
@@ -66,10 +67,10 @@ class inputProperty(object):
         self.C_blocks_input = C_blocks_input
         self.C_blocks_hidden = C_blocks_hidden
 
-    def deciderOfDimWorker(self, outputDim):
+    def decider_dimWorker(self, outputDim):
         return min(outputDim, 16)
 
-    def deciderOfSharedMemory(self, outputDim, layerName):
+    def decider_sharedMemory(self, outputDim, layerName):
         sharedMemory = self.MAX_warpPerBlock * \
             (self.partSize * 4 + outputDim * 4 + self.gap_smem * 4)/1e3
         if self.verbose_flag:
@@ -81,32 +82,32 @@ class inputProperty(object):
                 "{} updated (KB): {:.3f}".format(layerName, sharedMemory))
         return sharedMemory
 
-    def deciderOfWarpPerBlock(self, outputDim, sharedMemory):
+    def decider_warpPerBlock(self, outputDim, sharedMemory):
         warpPerBlock = int(
             sharedMemory * 1e3 / (self.partSize * 4 + outputDim * 4))
         return min(warpPerBlock, self.MAX_warpPerBlock)
 
-    def deciderOfCBlocks(self, outputDim):
+    def decider_C_Blocks(self, outputDim):
         dim_factors = factors(outputDim)
         first_ge_49 = first_ge(dim_factors, 49)
         return 1 if first_ge_49 == len(dim_factors) else dim_factors[first_ge_49]
 
-    def deciderOfABlocks(self, A_dim):
+    def decider_A_Blocks(self, A_dim):
         A_dim_factors = factors(A_dim)
         first_ge_8 = first_ge(A_dim_factors, 8)
         return 1 if first_ge_8 == len(A_dim_factors) else A_dim//A_dim_factors[first_ge_8]
 
-    def deciderOfGy(self, B_dim):
+    def decider_Gy(self, B_dim):
         return max(1, B_dim//32)
 
-    def deciderOfSparseRT(self):
+    def decider_SparseRT(self):
         '''Determine SparseRT related parameters.
         # TODO
         '''
-        self.A_blocks = self.deciderOfABlocks(self.modeBarrier)
-        self.C_blocks_input = self.deciderOfCBlocks(self.outputDim_input)
-        self.C_blocks_hidden = self.deciderOfCBlocks(self.outputDim_hidden)
-        self.Gy = self.deciderOfGy(self.num_nodes)
+        self.A_blocks = self.decider_A_Blocks(self.modeBarrier)
+        self.C_blocks_input = self.decider_C_Blocks(self.outputDim_input)
+        self.C_blocks_hidden = self.decider_C_Blocks(self.outputDim_hidden)
+        self.Gy = self.decider_Gy(self.num_nodes)
 
     def decider(self):
         '''
@@ -132,21 +133,21 @@ class inputProperty(object):
             # Determine the neighbor partitioning.
             self.partSize = int(self.avgNodeDegree)
 
-            sharedMemory_input = self.deciderOfSharedMemory(
+            sharedMemory_input = self.decider_sharedMemory(
                 self.outputDim_input, 'input-layer')
-            sharedMemory_hidden = self.deciderOfSharedMemory(
+            sharedMemory_hidden = self.decider_sharedMemory(
                 self.outputDim_hidden, 'hidden-layer')
 
             # Determine the warpPerBlock for input and hidden layer.
-            self.warpPerBlock_input = self.deciderOfWarpPerBlock(
+            self.warpPerBlock_input = self.decider_warpPerBlock(
                 self.outputDim_input, sharedMemory_input)
-            self.warpPerBlock_hidden = self.deciderOfWarpPerBlock(
+            self.warpPerBlock_hidden = self.decider_warpPerBlock(
                 self.outputDim_hidden, sharedMemory_hidden)
 
             # Determine the dimWorker_input for input layer and hidden layer.
-            self.dimWorker_input = self.deciderOfDimWorker(
+            self.dimWorker_input = self.decider_dimWorker(
                 self.outputDim_input)
-            self.dimWorker_hidden = self.deciderOfDimWorker(
+            self.dimWorker_hidden = self.decider_dimWorker(
                 self.outputDim_hidden)
 
             if self.enable_rabbit:
@@ -160,10 +161,10 @@ class inputProperty(object):
 
                 self.dataset_obj.rabbit_reorder()
 
-            self.deciderOfSparseRT()
+            self.decider_SparseRT()
 
             if self.verbose_flag:
-                print("\n=> AUTO Decider Complete !!!\n")
+                log.done("\n=> AUTO Decider Complete !!!\n")
 
     def set_input(self):
         '''

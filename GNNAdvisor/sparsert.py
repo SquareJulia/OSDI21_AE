@@ -1,6 +1,8 @@
 import os
 import os.path as osp
-from utils import remove_files_if_exists
+from utils import *
+from cuda import cuda
+import log
 
 
 class SparseRTLayer():
@@ -16,6 +18,7 @@ class SparseRTLayer():
         self.C_blocks = C_blocks
         self.Block_size = (C_dim//C_blocks)*self.Gy
         self.verbose = verbose
+        self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
 
     def gen_ptx(self):
         gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
@@ -23,22 +26,22 @@ class SparseRTLayer():
         --infile {} --outfile {}"\
             .format(self.A_dim, self.B_dim, self.C_dim, self.A_blocks, self.C_blocks, self.Gy, self.BA_npy, self.ptx_file)
         if self.verbose:
-            print('+ generating ptx with C_dim:{}...'.format(self.C_dim))
+            log.info('+ generating ptx with C_dim:{}...'.format(self.C_dim))
             print(gen_ptx_command)
         os.system(gen_ptx_command)
         if not osp.exists(self.ptx_file):
-            print('Failed to generate ptx!')
+            log.fail('Failed to generate ptx!')
             exit(0)
 
     def gen_cubin(self):
         gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
             self.ptx_file, self.cubin_file)
         if self.verbose:
-            print('+ generating cubin with C_dim:{}...'.format(self.C_dim))
+            log.info('+ generating cubin with C_dim:{}...'.format(self.C_dim))
             print(gen_cubin_command)
         os.system(gen_cubin_command)
         if not osp.exists(self.cubin_file):
-            print('Failed to generate cubin!')
+            log.fail('Failed to generate cubin!')
             exit(0)
 
     def prepare_dist_path(self, dist_path):
@@ -57,3 +60,9 @@ class SparseRTLayer():
         self.prepare_dist_path(osp.dirname(self.ptx_file))
         self.gen_ptx()
         self.gen_cubin()
+
+    def get_func_handle(self):
+        module = checkCudaErrors(
+            cuda.cuModuleLoad(str2cstr(self.cubin_file)))
+        self.cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
+            module, b'_Z2mmPPKfPPf'))

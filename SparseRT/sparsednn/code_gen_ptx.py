@@ -6,6 +6,7 @@ from utils import *
 from ptx_utils import *
 import random
 import os
+import log
 
 import argparse
 parser = argparse.ArgumentParser(description='CodeGen V1')
@@ -283,7 +284,7 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
     compile_command = "nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +\
         " " + temp_cu_file_name + \
         " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
-    print('---------compile command:')
+    log.info('Compiling .cu to .ptx:')
     print(compile_command)
     # print('LD_LIBRARY_PATH:')
     # print(os.getenv('LD_LIBRARY_PATH'))

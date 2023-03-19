@@ -16,6 +16,7 @@ import os
 from cuda import cuda, nvrtc
 from utils import *
 import ctypes
+from sparsert import SparseRTLayer
 
 
 parser = argparse.ArgumentParser()
@@ -131,45 +132,16 @@ if verbose_mode:
 ####################################
 # SparseRT
 ####################################
+BA_npy = dataset.save_transposed_sparse_matrix_npy(
+    inputInfo.modeBarrier)  # .npy
 
-print(' ==== sparse Matrix for sparseRT')
-sprt_input_file = dataset.save_for_sprt(inputInfo.modeBarrier)  # .npy
-sprt_dist_without_suffix = sprt_input_file.replace(
-    'npys', 'dist').split('.npy')[0]
-sprt_ptx_file = '{}.ptx'.format(sprt_dist_without_suffix)
-sprt_cubin_file = '{}.cubin'.format(sprt_dist_without_suffix)
-sprt_dist_file_dir = osp.dirname(sprt_ptx_file)
-if not osp.exists(sprt_dist_file_dir):
-    os.makedirs(sprt_dist_file_dir)
-else:
-    remove_files_if_exists(sprt_ptx_file, sprt_cubin_file)
-A_dim = num_nodes
-B_dim = num_nodes
-C_dim = args.hidden
-# A_blocks = 677  # A_dim=6
-A_blocks = 2
-C_blocks = 2
-Gy = 1
+inputLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
+                               inputInfo.outputDim_input, inputInfo.C_blocks_input, verbose_mode)
+hiddenLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
+                                inputInfo.outputDim_hidden, inputInfo.C_blocks_hidden, verbose_mode)
 
-
-gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
-    --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
-        --infile {} --outfile {}"\
-            .format(A_dim, B_dim, C_dim, A_blocks, C_blocks, Gy, sprt_input_file, sprt_ptx_file)
-os.system(gen_ptx_command)
-if not osp.exists(sprt_ptx_file):
-    print('Failed to generate ptx!')
-    exit(0)
-
-gen_cubin_command = "ptxas -arch=sm_70 {} -o {}".format(
-    sprt_ptx_file, sprt_cubin_file)
-print('generating cubin...')
-print(gen_cubin_command)
-os.system(gen_cubin_command)
-
-Gsy = C_dim//C_blocks
-Block_size = Gy*Gsy
-
+inputLayerSpRT.gen_ptx_and_cubin()
+hiddenLayerSpRT.gen_ptx_and_cubin()
 
 ####################################
 # Building neighbor partitioning.
@@ -199,7 +171,7 @@ if not verify_spmm:
                          inputInfo.row_pointers, inputInfo.column_index, degrees,
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock,
-                         sprt_cubin_file, A_blocks, C_blocks, Block_size)
+                         inputLayerSpRT.cubin_file, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size)
     valid.compute()
     valid.reference(dataset.edge_index, dataset.a_hat, dataset.num_nodes)
     valid.compare()

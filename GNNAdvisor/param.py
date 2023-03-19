@@ -1,4 +1,5 @@
 import math
+from utils import factors, first_ge
 
 # package of input parameters
 
@@ -12,7 +13,11 @@ class inputProperty(object):
                  enable_rabbit=False,
                  manual_mode=True,
                  verbose=False,
-                 sparseRTRatio=1.0):
+                 sparseRTRatio=1.0,
+                 A_blocks=None,
+                 Gy=None,
+                 C_blocks_input=None,
+                 C_blocks_hidden=None):
 
         if dataset_obj is None:
             raise ValueError("Dataset object MUST SET !!!")
@@ -27,6 +32,7 @@ class inputProperty(object):
         self.degrees = degrees
 
         self.num_nodes = dataset_obj.num_nodes
+        self.num_classes = dataset_obj.num_classes
         self.avgNodeDegree = dataset_obj.avg_degree
         self.avgEdgeSpan = dataset_obj.avg_edgeSpan
 
@@ -38,8 +44,8 @@ class inputProperty(object):
         self.dimWorker_hidden = dimWorker
         self.warpPerBlock_input = warpPerBlock
         self.warpPerBlock_hidden = warpPerBlock
-        self.inputDim = dataset_obj.num_features
-        self.hiddenDim = hiddenDim
+        self.outputDim_input = hiddenDim
+        self.outputDim_hidden = self.num_classes
 
         self.manual_mode = manual_mode
         self.enable_rabbit = enable_rabbit
@@ -48,13 +54,59 @@ class inputProperty(object):
         self.reorder_status = False
 
         self.MAX_warpPerBlock = 8
-        self.share_memory = sharedMem * 0.4
+        self.MAX_sharedMemory = sharedMem * 0.4
         self.gap_smem = 100
 
         self.partPtr = None
         self.part2Node = None
-
+        # SparseRT related
         self.modeBarrier = math.floor(self.num_nodes*sparseRTRatio)
+        self.A_blocks = A_blocks
+        self.Gy = Gy
+        self.C_blocks_input = C_blocks_input
+        self.C_blocks_hidden = C_blocks_hidden
+
+    def deciderOfDimWorker(self, outputDim):
+        return min(outputDim, 16)
+
+    def deciderOfSharedMemory(self, outputDim, layerName):
+        sharedMemory = self.MAX_warpPerBlock * \
+            (self.partSize * 4 + outputDim * 4 + self.gap_smem * 4)/1e3
+        if self.verbose_flag:
+            print(
+                "{} shared memory (KB): {:.3f} ".format(layerName, sharedMemory))
+        sharedMemory = min(sharedMemory, self.MAX_sharedMemory)
+        if self.verbose_flag:
+            print(
+                "{} updated (KB): {:.3f}".format(layerName, sharedMemory))
+        return sharedMemory
+
+    def deciderOfWarpPerBlock(self, outputDim, sharedMemory):
+        warpPerBlock = int(
+            sharedMemory * 1e3 / (self.partSize * 4 + outputDim * 4))
+        return min(warpPerBlock, self.MAX_warpPerBlock)
+
+    def deciderOfCBlocks(self, outputDim):
+        dim_factors = factors(outputDim)
+        first_ge_49 = first_ge(dim_factors, 49)
+        return 1 if first_ge_49 == len(dim_factors) else dim_factors[first_ge_49]
+
+    def deciderOfABlocks(self, A_dim):
+        A_dim_factors = factors(A_dim)
+        first_ge_8 = first_ge(A_dim_factors, 8)
+        return 1 if first_ge_8 == len(A_dim_factors) else A_dim//A_dim_factors[first_ge_8]
+
+    def deciderOfGy(self, B_dim):
+        return max(1, B_dim//32)
+
+    def deciderOfSparseRT(self):
+        '''Determine SparseRT related parameters.
+        # TODO
+        '''
+        self.A_blocks = self.deciderOfABlocks(self.modeBarrier)
+        self.C_blocks_input = self.deciderOfCBlocks(self.outputDim_input)
+        self.C_blocks_hidden = self.deciderOfCBlocks(self.outputDim_hidden)
+        self.Gy = self.deciderOfGy(self.num_nodes)
 
     def decider(self):
         '''
@@ -80,48 +132,22 @@ class inputProperty(object):
             # Determine the neighbor partitioning.
             self.partSize = int(self.avgNodeDegree)
 
-            est_shared = self.MAX_warpPerBlock * \
-                (self.partSize * 4 + self.inputDim * 4 + self.gap_smem * 4)/1e3
-            if self.verbose_flag:
-                print(
-                    "input-layer shared memory (KB): {:.3f} ".format(est_shared))
-            share_memory_input = min(est_shared, self.share_memory)
-            if self.verbose_flag:
-                print(
-                    "input-layer updated (KB): {:.3f}".format(share_memory_input))
-
-            est_shared = self.MAX_warpPerBlock * \
-                (self.partSize * 4 + self.hiddenDim + 4 * self.gap_smem)/1e3
-            if self.verbose_flag:
-                print(
-                    "hidden-layer shared memory (KB): {:.3f}".format(est_shared))
-            share_memory_hidden = min(est_shared, self.share_memory)
-            if self.verbose_flag:
-                print(
-                    "hidden-layer updated (KB): {:.3f}".format(share_memory_hidden))
+            sharedMemory_input = self.deciderOfSharedMemory(
+                self.outputDim_input, 'input-layer')
+            sharedMemory_hidden = self.deciderOfSharedMemory(
+                self.outputDim_hidden, 'hidden-layer')
 
             # Determine the warpPerBlock for input and hidden layer.
-            self.warpPerBlock_input = int(
-                share_memory_input * 1e3 / (self.partSize * 4 + self.inputDim * 4))
-            self.warpPerBlock_hidden = int(
-                share_memory_hidden * 1e3 / (self.partSize * 4 + self.hiddenDim * 4))
+            self.warpPerBlock_input = self.deciderOfWarpPerBlock(
+                self.outputDim_input, sharedMemory_input)
+            self.warpPerBlock_hidden = self.deciderOfWarpPerBlock(
+                self.outputDim_hidden, sharedMemory_hidden)
 
-            self.warpPerBlock_input = min(
-                self.warpPerBlock_input, self.MAX_warpPerBlock)
-            self.warpPerBlock_hidden = min(
-                self.warpPerBlock_hidden, self.MAX_warpPerBlock)
-
-            # Determine the dimWorker_input for input layer.
-            if self.inputDim > 32:
-                self.dimWorker_input = 32
-            else:
-                self.dimWorker_input = self.inputDim
-
-            # Determine the dimWorker_hidden for hidden layer.
-            if self.hiddenDim > 32:
-                self.dimWorker_hidden = 32
-            else:
-                self.dimWorker_hidden = self.hiddenDim
+            # Determine the dimWorker_input for input layer and hidden layer.
+            self.dimWorker_input = self.deciderOfDimWorker(
+                self.outputDim_input)
+            self.dimWorker_hidden = self.deciderOfDimWorker(
+                self.outputDim_hidden)
 
             if self.enable_rabbit:
                 # Determine whether to reorder a graph.
@@ -133,6 +159,8 @@ class inputProperty(object):
                     self.reorder_status = False
 
                 self.dataset_obj.rabbit_reorder()
+
+            self.deciderOfSparseRT()
 
             if self.verbose_flag:
                 print("\n=> AUTO Decider Complete !!!\n")

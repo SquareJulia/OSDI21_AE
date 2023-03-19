@@ -55,8 +55,8 @@ class Verification(object):
         # self.result_ref = spmm(torch.tensor(column_index,  dtype=torch.int64),
         #                        torch.FloatTensor(val), num_nodes, num_nodes, self.X)
         self.result_ref = torch.mm(torch.FloatTensor(val), self.X)
-        # print('----CPU result:')
-        # print(self.result_ref)
+        print('----CPU result:')
+        print(self.result_ref)
 
     def compute(self):
         '''
@@ -71,8 +71,8 @@ class Verification(object):
         self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
                                self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
                                self.sprt_cu_function.getPtr(), self.A_blocks, self.C_blocks, self.Block_size, self.ctx.getPtr())
-        # print('-----sparsert result:')
-        # print(self.result)
+        print('-----sparsert result:')
+        print(self.result)
 
     def compare(self):
         if self.result_ref is None or self.result is None:
@@ -81,6 +81,7 @@ class Verification(object):
 
         equs = torch.eq(self.result_ref, self.result.cpu())
         correct = torch.sum(equs)
+        print(1 - correct/self.result_ref.numel())
         if (1 - correct/self.result_ref.numel()) < 1e-4:
             print("# Verification PASSED")
         else:

@@ -179,9 +179,9 @@ class custom_dataset(torch.nn.Module):
         if self.verbose_flag:
             print("# Re-Build CSR (s): {:.3f}".format(build_csr))
 
-    def a_times_d_for_sprt(self, modeBarrier):
+    def a_times_d(self, modeBarrier):
         '''
-        compute DAD for [0, modeBarrier) lines of A_hat.
+        Compute D^A^D^ for [0, modeBarrier) lines of A_hat.
         '''
         self.a_hat = self.a_hat[0:modeBarrier]
         for row in range(modeBarrier):
@@ -190,21 +190,21 @@ class custom_dataset(torch.nn.Module):
                 self.a_hat[row][col] *= self.degrees[row].item()
                 self.a_hat[row][col] *= self.degrees[col].item()
 
-    def save_for_sprt(self, modeBarrier):
+    def save_transposed_sparse_matrix_npy(self, modeBarrier):
         '''
-        Save [0,modeBarrier) lines of A_hat(times degrees_hat) in '.npy' format for sparseRT.
-        Return: file name(.npy).
+        Save [0,modeBarrier) lines of D^A^D^ in '.npy' format for sparseRT.
+        Return: file name of .npy.
         '''
         if modeBarrier == 0:
             return ''
         if self.verbose_flag:
-            print('------save for sparseRT')
-            print('=== original A_hat:')
+            print('# Save transposed A^(i.e.D^A^D^) for sparseRT')
+            print('=== original A^:')
             torch.set_printoptions(precision=2)
             print(self.a_hat)
-        self.a_times_d_for_sprt(modeBarrier)
+        self.a_times_d(modeBarrier)
         if self.verbose_flag:
-            print('=== after times D:')
+            print('=== D^A^D^:')
             torch.set_printoptions(precision=2)
             print(self.a_hat)
 
@@ -217,10 +217,9 @@ class custom_dataset(torch.nn.Module):
         if os.path.isfile(npy_path):
             os.remove(npy_path)
 
-        if self.verbose_flag:
-            print('=== npy path:')
-            print(npy_path)
         np.save(npy_path, np.transpose(self.a_hat))
+        if self.verbose_flag:
+            print('transposed A^ saved at:{}'.format(npy_path))
         return npy_path
 
 

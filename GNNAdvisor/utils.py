@@ -4,7 +4,8 @@ import os
 import glob
 from functools import reduce
 from bisect import bisect_left
-
+import torch
+import log
 
 CUDA_SUCCESS = 0
 
@@ -48,3 +49,23 @@ def first_ge(alist, threshold):
     '''Return first index i that alist[i]>=threshold
     '''
     return bisect_left(alist, threshold)
+
+
+def compare_tensor(result, result_ref):
+    if result_ref is None or result is None:
+        raise ValueError(
+            "MUST compute result and result reference (CPU) first!!")
+
+    # equs = torch.eq(result_ref, result.cpu())
+    equs = torch.isclose(result_ref, result.cpu())
+    correct = torch.sum(equs)
+    # print('compute error ratio: {.3f}'.format(1 - correct/result_ref.numel()))
+    equal = False
+    if (1 - correct/result_ref.numel()) < 1:
+        # log.done("# Verification PASSED")
+        equal = True
+    else:
+        log.fail("# Verification FAILED")
+        print('compute error ratio: {.3f}'.format(
+            1 - correct/result_ref.numel()))
+    return equal

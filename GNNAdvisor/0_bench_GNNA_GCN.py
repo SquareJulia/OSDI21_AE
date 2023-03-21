@@ -10,12 +10,12 @@ enable_rabbit = True
 manual_mode = False
 # whether to printout more information such as the layerwise parameter.
 verbose_mode = True
-loadFromTxt = True         # whether to load data from a plain txt file.
+loadFromTxt = False         # whether to load data from a plain txt file.
 
 if run_GCN:
     model = 'gcn'
     warpPerBlock = 8        # only effective in manual model
-    hidden = [16]
+    hidden = [16]  # TODO
 else:
     model = 'gin'
     # only effective in manual model 2 for citeseer 6 for remaining datasets
@@ -25,8 +25,9 @@ else:
 partsize_li = [32]          # only effective in manual model
 
 dataset = [
-    ('g1.txt', 1000, 5),
-    # ('citeseer'	        , 3703	    , 6   ),
+    # ('g1.txt', 1000, 5),
+    # ('g4nodes.txt', 1000, 2)
+    ('citeseer', 3703, 6),
     # ('cora', 1433, 7),
     # ('pubmed'	        , 500	    , 3   ),
     # ('ppi'	            , 50	    , 121 ),
@@ -44,8 +45,8 @@ dataset = [
     # ( 'soc-BlogCatalog'	       	 , 128  , 39),
     # ( 'amazon0601'  	         , 96	, 22),
 ]
-dataDir = '../my-test-graphs'
-# dataDir = '../osdi-ae-graphs'
+# dataDir = '../my-test-graphs'
+dataDir = '../osdi-ae-graphs'
 
 for partsize in partsize_li:
     for hid in hidden:

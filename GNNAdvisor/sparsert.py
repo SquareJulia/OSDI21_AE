@@ -6,19 +6,23 @@ import log
 
 
 class SparseRTLayer():
-    def __init__(self, BA_npy, inputInfo, C_dim, C_blocks, verbose):
+    def __init__(self, BA_npy, inputInfo, C_dim, C_blocks, Gy, verbose):
         self.BA_npy = BA_npy
 
         self.A_dim = inputInfo.modeBarrier
         self.A_blocks = inputInfo.A_blocks
         self.B_dim = inputInfo.num_nodes
-        self.Gy = inputInfo.Gy
 
         self.C_dim = C_dim
         self.C_blocks = C_blocks
+        self.Gy = Gy
         self.Block_size = (C_dim//C_blocks)*self.Gy
         self.verbose = verbose
         self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
+
+        self.ptx_file = ''
+        self.cubin_file = ''
+        self.cu_function = cuda.CUfunction()
 
     def gen_ptx(self):
         gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \

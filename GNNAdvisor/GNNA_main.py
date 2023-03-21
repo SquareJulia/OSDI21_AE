@@ -91,24 +91,11 @@ else:
     dataset = custom_dataset(path, args.dim, args.classes,
                              load_from_txt=False, verbose=verbose_mode)
 
-num_nodes = dataset.num_nodes
-num_edges = dataset.num_edges
-column_index = dataset.column_index
-row_pointers = dataset.row_pointers
-degrees = dataset.degrees
-if verbose_mode:
-    print('degrees:')
-    print(degrees)
-    print('column_index:')
-    print(column_index)
-    print('row_pointers:')
-    print(row_pointers)
 
 ####################################
 # Building input property profile.
 ####################################
-inputInfo = inputProperty(row_pointers, column_index, degrees,
-                          partSize, dimWorker, warpPerBlock, sharedMem,
+inputInfo = inputProperty(partSize, dimWorker, warpPerBlock, sharedMem,
                           hiddenDim=args.hidden, dataset_obj=dataset, enable_rabbit=enable_rabbit,
                           manual_mode=manual_mode, verbose=verbose_mode)
 
@@ -127,59 +114,82 @@ inputInfo = inputInfo.set_hidden()
 if verbose_mode:
     inputInfo.print_param()
     print()
+    inputInfo.print_param_SpRT()
+    print()
     print('----------------------------')
+
+num_nodes = dataset.num_nodes
+num_edges = dataset.num_edges
+column_index = dataset.column_index
+row_pointers = dataset.row_pointers
+degrees = dataset.degrees
+# if verbose_mode:
+#     print('degrees:')
+#     print(degrees)
+#     print('column_index:')
+#     print(column_index)
+#     print('row_pointers:')
+#     print(row_pointers)
 # sys.exit(0)
 
 ####################################
 # SparseRT
 ####################################
+
 BA_npy = dataset.save_transposed_sparse_matrix_npy(
-    inputInfo.modeBarrier)  # .npy
+    inputInfo.modeBarrier) if inputInfo.modeBarrier > 0 else ''
 
 inputLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
-                               inputInfo.outputDim_input, inputInfo.C_blocks_input, verbose_mode)
+                               inputInfo.outputDim_input, inputInfo.C_blocks_input, inputInfo.Gy_input, verbose_mode)
 hiddenLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
-                                inputInfo.outputDim_hidden, inputInfo.C_blocks_hidden, verbose_mode)
+                                inputInfo.outputDim_hidden, inputInfo.C_blocks_hidden, inputInfo.Gy_hidden, verbose_mode)
 
-inputLayerSpRT.gen_ptx_and_cubin()
-inputLayerSpRT.get_func_handle()
-hiddenLayerSpRT.gen_ptx_and_cubin()
-hiddenLayerSpRT.get_func_handle()
+if inputInfo.modeBarrier > 0:
+    start = time.perf_counter()
+    inputLayerSpRT.gen_ptx_and_cubin()
+    inputLayerSpRT.get_func_handle()
+    hiddenLayerSpRT.gen_ptx_and_cubin()
+    hiddenLayerSpRT.get_func_handle()
+    elapsed = time.perf_counter() - start
+    if verbose_mode:
+        log.done(
+            "# SparseRT generate .ptx & .cubin, and get function handle (s): {:.3f}".format(elapsed))
 
-if verbose_mode:
-    log.done('Finished preparations for SparseRT.')
-    print('----------------------------')
 ####################################
 # Building neighbor partitioning.
 ####################################
-start = time.perf_counter()
-partPtr, part2Node = GNNA.build_part(
-    inputInfo.partSize, inputInfo.row_pointers)
-build_neighbor_parts = time.perf_counter() - start
-if verbose_mode:
-    log.done("# Build nb_part (s): {:.3f}".format(build_neighbor_parts))
 
-inputInfo.row_pointers = inputInfo.row_pointers.to(device)
-inputInfo.column_index = inputInfo.column_index.to(device)
+
+if inputInfo.modeBarrier < num_nodes:
+    start = time.perf_counter()
+    partPtr, part2Node = GNNA.build_part(
+        inputInfo.partSize, dataset.row_pointers, inputInfo.modeBarrier)
+    elapsed = time.perf_counter() - start
+    if verbose_mode:
+        log.done("# Build nb_part (s): {:.3f}".format(elapsed))
+else:
+    partPtr = torch.zeros(0)
+    part2Node = torch.zeros(0)
+
+dataset.row_pointers = dataset.row_pointers.to(device)
+dataset.column_index = dataset.column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node = part2Node.int().to(device)
 
-if verbose_mode:
-    print('degrees after:')
-    print(degrees)
 ####################################
 # Verifing a single SpMM kernel
 # against the CPU reference.
 ####################################
-if not verify_spmm:
+if verify_spmm:
     from unitest import *
     valid = Verification(args.hidden,
-                         inputInfo.row_pointers, inputInfo.column_index, degrees,
+                         dataset.row_pointers, dataset.column_index, degrees,
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock,
                          inputLayerSpRT.cu_function, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size, inputLayerSpRT.ctx)
     valid.compute()
-    valid.reference(dataset.edge_index, dataset.a_hat, dataset.num_nodes)
+    valid.reference(dataset.edge_index, dataset.a_times_d(
+        inputInfo.modeBarrier), dataset.num_nodes)
     valid.compare()
     sys.exit(0)
 
@@ -190,7 +200,7 @@ if not verify_spmm:
 if single_spmm:
     from unitest import *
     valid = Verification(args.hidden,
-                         inputInfo.row_pointers, inputInfo.column_index, degrees,
+                         inputInfo.row_pointers, dataset.column_index, degrees,
                          inputInfo.partPtr, inputInfo.part2Node,
                          partSize, dimWorker, warpPerBlock)
     valid.profile_spmm(round=args.num_epoches)
@@ -199,36 +209,25 @@ if single_spmm:
 ####################################
 # Building GNN model
 ####################################
-if args.model == 'gcn':
-    class Net(torch.nn.Module):
-        def __init__(self):
-            super(Net, self).__init__()
-            self.conv1 = GCNConv(dataset.num_features, args.hidden)
-            self.conv2 = GCNConv(args.hidden, dataset.num_classes)
+# if args.model == 'gcn':
 
-        def forward(self):
-            x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input()))
-            x = self.conv2(x, inputInfo.set_hidden())
-            return F.log_softmax(x, dim=1)
-else:
-    class Net(torch.nn.Module):
-        def __init__(self):
-            super(Net, self).__init__()
-            self.conv1 = GINConv(dataset.num_features, args.hidden)
-            self.conv2 = GINConv(args.hidden, args.hidden)
-            self.conv3 = GINConv(args.hidden, args.hidden)
-            self.conv4 = GINConv(args.hidden, args.hidden)
-            self.conv5 = GINConv(args.hidden, dataset.num_classes)
+a_hat_hat_for_test = torch.FloatTensor(dataset.a_times_d())
 
-        def forward(self):
-            x = dataset.x
-            x = F.relu(self.conv1(x, inputInfo.set_input()))
-            x = F.relu(self.conv2(x, inputInfo.set_hidden()))
-            x = F.relu(self.conv3(x, inputInfo.set_hidden()))
-            x = F.relu(self.conv4(x, inputInfo.set_hidden()))
-            x = self.conv5(x, inputInfo.set_hidden())
-            return F.log_softmax(x, dim=1)
+
+class Net(torch.nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = GCNConv(dataset.num_features, args.hidden,
+                             inputLayerSpRT, a_hat_hat_for_test)
+        self.conv2 = GCNConv(args.hidden, dataset.num_classes,
+                             hiddenLayerSpRT, a_hat_hat_for_test)
+
+    def forward(self):
+        x = dataset.x
+        x = F.relu(self.conv1(x, inputInfo.set_input()))
+        x = self.conv2(x, inputInfo.set_hidden())
+        return F.log_softmax(x, dim=1)
+
 
 model, dataset = Net().to(device), dataset.to(device)
 if verbose_mode:
@@ -251,14 +250,15 @@ def train():
 
 if __name__ == '__main__':
     # dry run
-    for _ in range(10):
-        train()
+    # for _ in range(10):
+    #     train()
     # exit(0)
 
     torch.cuda.synchronize()
     start_train = time.perf_counter()
-    for _ in tqdm(range(1, args.num_epoches + 1)):
-        train()
+    # for _ in tqdm(range(1, args.num_epoches + 1)):
+    #     train()
+    train()
     torch.cuda.synchronize()
     train_time = time.perf_counter() - start_train
 

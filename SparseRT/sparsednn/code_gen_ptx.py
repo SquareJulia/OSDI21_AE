@@ -43,7 +43,7 @@ outfile = args.outfile
 BA = np.load(input_file)
 if input_file_bias:
     bias = np.load(input_file_bias)
-print(BA.shape)
+# print(BA.shape)
 BA = BA.squeeze()
 
 if FUSE_END and GY > 1:

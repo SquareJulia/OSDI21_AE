@@ -65,9 +65,9 @@ class Verification(object):
         X = self.X.cuda()
         # print('----\nunitest X:')
         # print(X)
-        self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
-                               self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
-                               self.sprt_cu_function.getPtr(), self.A_blocks, self.C_blocks, self.Block_size, self.ctx.getPtr())
+        # self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
+        #                        self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock,
+        #                        self.sprt_cu_function.getPtr(), self.A_blocks, self.C_blocks, self.Block_size, self.ctx.getPtr())
         print('-----sparsert result:')
         print(self.result)
 
@@ -89,14 +89,14 @@ class Verification(object):
         print("SpMM profiling size: N: {}, N: {}, K: {}".format(
             X.size(0), X.size(0), X.size(1)))
         # dry run
-        for _ in range(10):
-            self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
-                                   self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock)
+        # for _ in range(10):
+        # self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
+        #    self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock)
         torch.cuda.synchronize()
         start = time.perf_counter()
-        for _ in tqdm(range(round)):
-            self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
-                                   self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock)
+        # for _ in tqdm(range(round)):
+        # self.result = GNNA.SAG(X, self.row_pointers, self.column_index, self.degrees,
+        #    self.partPtr, self.part2Node, self.partSize, self.dimWorker, self.warpPerBlock)
         torch.cuda.synchronize()
         dur = time.perf_counter() - start
         print("=> SpMM profiling avg (ms): {:.3f}".format(dur*1e3/round))

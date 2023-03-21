@@ -1,8 +1,25 @@
 #include <torch/extension.h>
 #include <vector>
 
-torch::Tensor SAG_cuda(
+// torch::Tensor SAG_cuda(
+//     torch::Tensor input,
+//     torch::Tensor row_pointers,
+//     torch::Tensor column_index,
+//     torch::Tensor degrees,
+//     torch::Tensor part_pointers,
+//     torch::Tensor part2Node,
+//     int partSize,
+//     int dimWorker,
+//     int warpPerBlock,
+//     long long sprt_cu_function,
+//     int A_blocks,
+//     int C_blocks,
+//     int Block_size,
+//     long long pctx_ptr);
+
+std::vector<torch::Tensor> spmm_forward_cuda(
     torch::Tensor input,
+    torch::Tensor weight,
     torch::Tensor row_pointers,
     torch::Tensor column_index,
     torch::Tensor degrees,
@@ -15,19 +32,8 @@ torch::Tensor SAG_cuda(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr);
-
-std::vector<torch::Tensor> spmm_forward_cuda(
-    torch::Tensor input,
-    torch::Tensor weight,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    torch::Tensor degrees,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock);
+    long long pctx_ptr,
+    int modeBarrier);
 
 std::vector<torch::Tensor> spmm_backward_cuda(
     torch::Tensor d_output,
@@ -40,32 +46,13 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     torch::Tensor part2Node,
     int partSize,
     int dimWorker,
-    int warpPerBlock);
-
-std::vector<torch::Tensor> spmm_forward_cuda_gin(
-    torch::Tensor input,
-    torch::Tensor weight,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    float epsilon,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock);
-
-std::vector<torch::Tensor> spmm_backward_cuda_gin(
-    torch::Tensor d_output,
-    torch::Tensor X,
-    torch::Tensor W,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    float epsilon,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock);
+    int warpPerBlock,
+    long long sprt_cu_function,
+    int A_blocks,
+    int C_blocks,
+    int Block_size,
+    long long pctx_ptr,
+    int modeBarrier);
 
 // #define CHECK_CUDA(x) TORCH_CHECK(x.type().is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CUDA(x) TORCH_CHECK(x.device().is_cuda(), #x " must be a CUDA tensor")
@@ -74,8 +61,38 @@ std::vector<torch::Tensor> spmm_backward_cuda_gin(
   CHECK_CUDA(x);       \
   CHECK_CONTIGUOUS(x)
 
-torch::Tensor SAG(
+// torch::Tensor SAG(
+//     torch::Tensor input,
+//     torch::Tensor row_pointers,
+//     torch::Tensor column_index,
+//     torch::Tensor degrees,
+//     torch::Tensor part_pointers,
+//     torch::Tensor part2Node,
+//     int partSize,
+//     int dimWorker,
+//     int warpPerBlock,
+//     long long sprt_cu_function,
+//     int A_blocks,
+//     int C_blocks,
+//     int Block_size,
+//     long long pctx_ptr)
+// {
+//   CHECK_INPUT(input);
+//   CHECK_INPUT(row_pointers);
+//   CHECK_INPUT(column_index);
+//   CHECK_INPUT(degrees);
+//   CHECK_INPUT(part_pointers);
+//   CHECK_INPUT(part2Node);
+
+//   return SAG_cuda(input, row_pointers, column_index,
+//                   degrees, part_pointers, part2Node,
+//                   partSize, dimWorker, warpPerBlock,
+//                   sprt_cu_function, A_blocks, C_blocks, Block_size, pctx_ptr);
+// }
+
+std::vector<torch::Tensor> spmm_forward(
     torch::Tensor input,
+    torch::Tensor weight,
     torch::Tensor row_pointers,
     torch::Tensor column_index,
     torch::Tensor degrees,
@@ -88,32 +105,8 @@ torch::Tensor SAG(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr)
-{
-  CHECK_INPUT(input);
-  CHECK_INPUT(row_pointers);
-  CHECK_INPUT(column_index);
-  CHECK_INPUT(degrees);
-  CHECK_INPUT(part_pointers);
-  CHECK_INPUT(part2Node);
-
-  return SAG_cuda(input, row_pointers, column_index,
-                  degrees, part_pointers, part2Node,
-                  partSize, dimWorker, warpPerBlock,
-                  sprt_cu_function, A_blocks, C_blocks, Block_size, pctx_ptr);
-}
-
-std::vector<torch::Tensor> spmm_forward(
-    torch::Tensor input,
-    torch::Tensor weight,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    torch::Tensor degrees,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock)
+    long long pctx_ptr,
+    int modeBarrier)
 {
   CHECK_INPUT(input);
   CHECK_INPUT(weight);
@@ -125,7 +118,9 @@ std::vector<torch::Tensor> spmm_forward(
 
   return spmm_forward_cuda(input, weight, row_pointers, column_index,
                            degrees, part_pointers, part2Node,
-                           partSize, dimWorker, warpPerBlock);
+                           partSize, dimWorker, warpPerBlock,
+                           sprt_cu_function, A_blocks, C_blocks, Block_size,
+                           pctx_ptr, modeBarrier);
 }
 
 std::vector<torch::Tensor> spmm_backward(
@@ -139,7 +134,13 @@ std::vector<torch::Tensor> spmm_backward(
     torch::Tensor part2Node,
     int partSize,
     int dimWorker,
-    int warpPerBlock)
+    int warpPerBlock,
+    long long sprt_cu_function,
+    int A_blocks,
+    int C_blocks,
+    int Block_size,
+    long long pctx_ptr,
+    int modeBarrier)
 {
 
   CHECK_INPUT(d_output);
@@ -153,77 +154,24 @@ std::vector<torch::Tensor> spmm_backward(
 
   return spmm_backward_cuda(d_output, X, W, row_pointers, column_index,
                             degrees, part_pointers, part2Node,
-                            partSize, dimWorker, warpPerBlock);
-}
-
-////////////////////////////////
-// spmm forward GIN
-///////////////////////////////
-std::vector<torch::Tensor> spmm_forward_gin(
-    torch::Tensor input,
-    torch::Tensor weight,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    float epsilon,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock)
-{
-  CHECK_INPUT(input);
-  CHECK_INPUT(weight);
-  CHECK_INPUT(row_pointers);
-  CHECK_INPUT(column_index);
-  CHECK_INPUT(part_pointers);
-  CHECK_INPUT(part2Node);
-
-  return spmm_forward_cuda_gin(input, weight, row_pointers, column_index,
-                               epsilon, part_pointers, part2Node,
-                               partSize, dimWorker, warpPerBlock);
-}
-
-////////////////////////////////
-// spmm backward GIN
-///////////////////////////////
-std::vector<torch::Tensor> spmm_backward_gin(
-    torch::Tensor d_output,
-    torch::Tensor X,
-    torch::Tensor W,
-    torch::Tensor row_pointers,
-    torch::Tensor column_index,
-    float epsilon,
-    torch::Tensor part_pointers,
-    torch::Tensor part2Node,
-    int partSize,
-    int dimWorker,
-    int warpPerBlock)
-{
-  CHECK_INPUT(d_output);
-  CHECK_INPUT(X);
-  CHECK_INPUT(W);
-  CHECK_INPUT(row_pointers);
-  CHECK_INPUT(column_index);
-  CHECK_INPUT(part_pointers);
-  CHECK_INPUT(part2Node);
-
-  return spmm_backward_cuda_gin(d_output, X, W, row_pointers, column_index,
-                                epsilon, part_pointers, part2Node,
-                                partSize, dimWorker, warpPerBlock);
+                            partSize, dimWorker, warpPerBlock,
+                            sprt_cu_function, A_blocks, C_blocks, Block_size,
+                            pctx_ptr, modeBarrier);
 }
 
 std::vector<torch::Tensor> build_part(
     int partSize,
-    torch::Tensor indptr)
+    torch::Tensor indptr,
+    int modeBarrier)
 {
 
   auto indptr_acc = indptr.accessor<int, 1>();
   int num_nodes = indptr.size(0) - 1;
   int degree, thisNumParts, numParts = 0;
 
-  for (int i = 0; i < num_nodes; i++)
+  for (int i = modeBarrier; i < num_nodes; i++)
   {
-    degree = indptr_acc[i + 1] - indptr_acc[i];
+    int degree = indptr_acc[i + 1] - indptr_acc[i];
     if (degree % partSize == 0)
       thisNumParts = degree / partSize;
     else
@@ -235,7 +183,7 @@ std::vector<torch::Tensor> build_part(
   auto part2Node = torch::zeros(numParts);
 
   int part_counter = 0;
-  for (int i = 0; i < num_nodes; i++)
+  for (int i = modeBarrier; i < num_nodes; i++)
   {
     int degree = indptr_acc[i + 1] - indptr_acc[i];
     if (degree % partSize == 0)
@@ -258,13 +206,10 @@ std::vector<torch::Tensor> build_part(
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
 {
-  m.def("SAG", &SAG, "GNNAdvisor base Scatter-and-Gather Kernel (CUDA)");
+  // m.def("SAG", &SAG, "GNNAdvisor base Scatter-and-Gather Kernel (CUDA)");
 
   m.def("forward", &spmm_forward, "GNNAdvisor forward (CUDA)");
   m.def("backward", &spmm_backward, "GNNAdvisor backward (CUDA)");
-
-  m.def("forward_gin", &spmm_forward_gin, "GNNAdvisor forward GIN (CUDA)");
-  m.def("backward_gin", &spmm_backward_gin, "GNNAdvisor forward GIN (CUDA)");
 
   m.def("build_part", &build_part, "GNNAdvisor backward (CPU)");
 }

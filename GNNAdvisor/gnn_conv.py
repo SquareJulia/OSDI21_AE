@@ -3,53 +3,73 @@ import torch
 import math
 import GNNAdvisor as GNNA
 from param import *
+from utils import compare_tensor
+import log
 
-class ScatterAndGather(torch.autograd.Function):
-    '''
-    Basic Scatter and Gather kernel for GNN.
-    Graph is undirected.
-    '''
-    @staticmethod
-    def forward(ctx, X, inputInfo):
-        ctx.inputInfo = inputInfo
-        ctx.partSize, ctx.dimWorker, ctx.warpPerBlock = \
-                        inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock
-        X_prime = GNNA.SAG(X, inputInfo.row_pointers, inputInfo.column_index, 
-                            inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-                                inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
-        return X_prime
 
-    @staticmethod
-    def backward(ctx, d_output):
-        inputInfo = ctx.inputInfo
-        d_input = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index, \
-                                    inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-                                        ctx.partSize, ctx.dimWorker, ctx.warpPerBlock)
-        return d_input
+# class ScatterAndGather(torch.autograd.Function):
+#     '''
+#     Basic Scatter and Gather kernel for GNN.
+#     Graph is undirected.
+#     '''
+#     @staticmethod
+#     def forward(ctx, X, inputInfo):
+#         ctx.inputInfo = inputInfo
+#         ctx.partSize, ctx.dimWorker, ctx.warpPerBlock = \
+#             inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock
+#         X_prime = GNNA.SAG(X, inputInfo.row_pointers, inputInfo.column_index,
+#                            inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node,
+#                            inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
+#         return X_prime
+
+#     @staticmethod
+#     def backward(ctx, d_output):
+#         inputInfo = ctx.inputInfo
+#         d_input = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index,
+#                            inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node,
+#                            ctx.partSize, ctx.dimWorker, ctx.warpPerBlock)
+#         return d_input
 
 
 class GNNAFunction(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, X, weight, inputInfo):
+    def forward(ctx, X, weight, inputInfo, SpRT_layer, a_hat_hat_for_test):
         ctx.save_for_backward(X, weight)
         ctx.inputInfo = inputInfo
+        ctx.SpRT_layer = SpRT_layer
         ctx.partSize, ctx.dimWorker, ctx.warpPerBlock = \
             inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock
 
-        # print("[Foward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index, 
-        #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))    
+        # print("[Foward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,
+        #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
         # print("[Foward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        X_prime = GNNA.forward(X, weight, inputInfo.row_pointers, inputInfo.column_index, 
-                                inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-                                inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)[0]
-        
+        X_prime = GNNA.forward(X, weight, inputInfo.dataset_obj.row_pointers, inputInfo.dataset_obj.column_index,
+                               inputInfo.dataset_obj.degrees, inputInfo.partPtr, inputInfo.part2Node,
+                               inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock,
+                               SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
+                               SpRT_layer.Block_size, SpRT_layer.ctx.getPtr(), inputInfo.modeBarrier)[0]
 
+        X_prime_ref = torch.mm(a_hat_hat_for_test, torch.mm(X, weight).cpu())
+        if not compare_tensor(X_prime, X_prime_ref):
+            print('X_prime:')
+            torch.set_printoptions(precision=5, sci_mode=False)
+            print(X_prime)
+            print()
+            print('X_prime_ref:')
+            print(X_prime_ref)
+            log.info('ref:')
+            print('a_hat_hat:')
+            print(a_hat_hat_for_test)
+            print('X:')
+            print(X)
+            print('weight:')
+            print(weight)
         # print(X.size())
         # print(weight.size())
         # X_prime = torch.mm(X, weight)
-        # X_prime = GNNA.SAG(X_prime, inputInfo.row_pointers, inputInfo.column_index, 
+        # X_prime = GNNA.SAG(X_prime, inputInfo.row_pointers, inputInfo.column_index,
         #                     inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
         #                         inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
         return X_prime
@@ -58,16 +78,19 @@ class GNNAFunction(torch.autograd.Function):
     def backward(ctx, d_output):
         X, weight = ctx.saved_tensors
         inputInfo = ctx.inputInfo
+        SpRT_layer = ctx.SpRT_layer
 
         # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
 
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
-    
-        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.row_pointers, inputInfo.column_index, 
-                                        inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node,
-                                        ctx.partSize, ctx.dimWorker, ctx.warpPerBlock)
-        # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index, 
+
+        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.row_pointers, inputInfo.dataset_obj.column_index,
+                                          inputInfo.dataset_obj.degrees, inputInfo.partPtr, inputInfo.part2Node,
+                                          ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
+                                          SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
+                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr(), inputInfo.modeBarrier)
+        # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index,
         #                             inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
         #                                 inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
         # print(weight.size())
@@ -75,13 +98,16 @@ class GNNAFunction(torch.autograd.Function):
         # print(weight_p.size())
         # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
         # d_weight = torch.mm(X.permute(1,0), d_X_prime);
-        return d_input, d_weight, None
+        return d_input, d_weight, None, None, None
+
 
 class GCNConv(torch.nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, SpRT_layer, a_hat_hat_for_test):
         super(GCNConv, self).__init__()
         self.weights = torch.nn.Parameter(torch.randn(input_dim, output_dim))
         self.reset_parameters()
+        self.SpRT_layer = SpRT_layer
+        self.a_hat_hat_for_test = a_hat_hat_for_test
 
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weights.size(1))
@@ -95,53 +121,4 @@ class GCNConv(torch.nn.Module):
         edges: the CSR edge list of the graph, shape: [edge, 1].
         partitioin: for the graph with the part-based optimziation.
         '''
-        return GNNAFunction.apply(X, self.weights, inputInfo)
-
-
-class GNNAFunction_GIN(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, X, weight, inputInfo, eplison):
-        # print("partSize: {}, dimWorker: {}, warpPerBlock: {}".format(inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock))
-        X_prime, X_agg = GNNA.forward_gin(X, weight, inputInfo.row_pointers, inputInfo.column_index, 
-                                        eplison, inputInfo.partPtr, inputInfo.part2Node, 
-                                        inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
-
-        ctx.save_for_backward(X_agg, weight)
-        ctx.inputInfo = inputInfo
-        ctx.partSize, ctx.dimWorker, ctx.warpPerBlock, ctx.eplison = \
-            inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock, eplison
-
-        return X_prime
-
-    @staticmethod
-    def backward(ctx, d_output):
-        
-        X, weights  = ctx.saved_tensors
-        inputInfo = ctx.inputInfo
-
-        d_input, d_weights = GNNA.backward_gin(d_output, X, weights, inputInfo.row_pointers, inputInfo.column_index,
-                                               ctx.eplison, inputInfo.partPtr, inputInfo.part2Node,
-                                                ctx.partSize, ctx.dimWorker, ctx.warpPerBlock)
-        
-        return d_input, d_weights, None, None
-
-class GINConv(torch.nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(GINConv, self).__init__()
-        self.weights = torch.nn.Parameter(torch.randn(input_dim, output_dim))
-        self.eplison = 0.5
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weights.size(1))
-        self.weights.data.uniform_(-stdv, stdv)
-
-    def forward(self, X, inputInfo):
-        '''
-        @param:
-        X:  the input tensor of the graph node embedding, shape: [n_nodes, n_dim].
-        A:  the CSR node pointer of the graph, shape: [node, 1].
-        edges: the CSR edge list of the graph, shape: [edge, 1].
-        partitioin: for the graph with the part-based optimziation.
-        '''
-        return GNNAFunction_GIN.apply(X, self.weights, inputInfo, self.eplison)
+        return GNNAFunction.apply(X, self.weights, inputInfo, self.SpRT_layer, self.a_hat_hat_for_test)

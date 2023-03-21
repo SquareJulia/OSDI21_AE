@@ -177,48 +177,65 @@ class custom_dataset(torch.nn.Module):
         self.degrees = (1.0/torch.sqrt(torch.FloatTensor(
             list(map(func, degrees))))).cuda()
 
+        # print('-------')
+        # print('degrees:')
+        # print(self.degrees)
+        # print('-------')
+        # print('A_hat:')
+        # print(self.a_hat)
+        # print('-------')
+        # print('column_index:')
+        # print(self.column_index)
+        # print('-------')
+        # print('row_pointers:')
+        # print(self.row_pointers)
+
         if self.verbose_flag:
             print("# Re-Build CSR (s): {:.3f}".format(build_csr))
 
-    def a_times_d(self, modeBarrier):
+    def a_times_d(self, modeBarrier=None):
         '''
-        Compute D^A^D^ for [0, modeBarrier) lines of A_hat.
+        Return D^A^D^ for [0, modeBarrier) lines of A_hat (for SparseRT).
+        For GNNA, this step will be conducted in the GPU kernel.
         '''
-        self.a_hat = self.a_hat[0:modeBarrier]
+        modeBarrier = modeBarrier if modeBarrier is not None else self.num_nodes
+        a_hat_hat = self.a_hat[0:modeBarrier].copy()
         for row in range(modeBarrier):
             for col_idx_idx in range(self.row_pointers[row], self.row_pointers[row+1]):
                 col = self.column_index[col_idx_idx].item()
-                self.a_hat[row][col] *= self.degrees[row].item()
-                self.a_hat[row][col] *= self.degrees[col].item()
+                a_hat_hat[row][col] *= self.degrees[row].item()
+                a_hat_hat[row][col] *= self.degrees[col].item()
+        return a_hat_hat
 
     def save_transposed_sparse_matrix_npy(self, modeBarrier):
         '''
         Save [0,modeBarrier) lines of D^A^D^ in '.npy' format for sparseRT.
-        Return: file name of .npy.
+        Return: file name of '.npy'.
         '''
         if modeBarrier == 0:
             return ''
         if self.verbose_flag:
             log.info('# Saving transposed A^(i.e.D^A^D^) for sparseRT')
-            print('=== original A^:')
-            torch.set_printoptions(precision=2)
-            print(self.a_hat)
-        self.a_times_d(modeBarrier)
-        if self.verbose_flag:
-            print('=== D^A^D^:')
-            torch.set_printoptions(precision=2)
-            print(self.a_hat)
+            # print('=== original A^:')
+            # torch.set_printoptions(precision=2)
+            # print(self.a_hat)
+        a_hat_hat = self.a_times_d(modeBarrier)
+        # if self.verbose_flag:
+        # print('=== D^A^D^:')
+        # torch.set_printoptions(precision=2)
+        # print(a_hat_hat)
 
         npy_dir = '{}{}'.format(
             SPARSERT_MATERIALS_NPYS_DIR, osp.dirname(self.path).split('../')[1])
         if not osp.exists(npy_dir):
             os.makedirs(npy_dir)
-        npy_basename = '{}.npy'.format(osp.basename(self.path).split('.')[0])
+        npy_basename = '{}_{}.npy'.format(
+            osp.basename(self.path).split('.')[0], modeBarrier)
         npy_path = osp.join(npy_dir, npy_basename)
         if os.path.isfile(npy_path):
             os.remove(npy_path)
 
-        np.save(npy_path, np.transpose(self.a_hat))
+        np.save(npy_path, np.transpose(a_hat_hat))
         if self.verbose_flag:
             log.done('transposed A^ saved at:{}'.format(npy_path))
         return npy_path

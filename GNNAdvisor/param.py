@@ -2,21 +2,23 @@ import math
 from utils import factors, first_ge
 import log
 
+MAX_BLOCK_SIZE = 1024
+
 # package of input parameters
 
 
 class inputProperty(object):
-    def __init__(self, row_pointers=None, column_index=None, degrees=None,
-                 partSize=None, dimWorker=None, warpPerBlock=None,
+    def __init__(self, partSize=None, dimWorker=None, warpPerBlock=None,
                  sharedMem=None,
                  hiddenDim=None,
                  dataset_obj=None,
                  enable_rabbit=False,
                  manual_mode=True,
                  verbose=False,
-                 sparseRTRatio=1.0,
+                 sparseRTRatio=0.1,
                  A_blocks=None,
-                 Gy=None,
+                 Gy_input=None,
+                 Gy_hidden=None,
                  C_blocks_input=None,
                  C_blocks_hidden=None):
 
@@ -27,10 +29,6 @@ class inputProperty(object):
             raise ValueError("sparseRTRation MUST BE BETWEEN 0 and 1 !!!")
 
         self.dataset_obj = dataset_obj
-
-        self.row_pointers = row_pointers
-        self.column_index = column_index
-        self.degrees = degrees
 
         self.num_nodes = dataset_obj.num_nodes
         self.num_classes = dataset_obj.num_classes
@@ -61,9 +59,11 @@ class inputProperty(object):
         self.partPtr = None
         self.part2Node = None
         # SparseRT related
-        self.modeBarrier = math.floor(self.num_nodes*sparseRTRatio)
+        # self.modeBarrier = math.floor(self.num_nodes*sparseRTRatio)# TODO
+        self.modeBarrier = 200
         self.A_blocks = A_blocks
-        self.Gy = Gy
+        self.Gy_input = Gy_input
+        self.Gy_hidden = Gy_hidden
         self.C_blocks_input = C_blocks_input
         self.C_blocks_hidden = C_blocks_hidden
 
@@ -97,8 +97,9 @@ class inputProperty(object):
         first_ge_8 = first_ge(A_dim_factors, 8)
         return 1 if first_ge_8 == len(A_dim_factors) else A_dim//A_dim_factors[first_ge_8]
 
-    def decider_Gy(self, B_dim):
-        return max(1, B_dim//32)
+    def decider_Gy(self, B_dim, C_dim, C_blocks):
+        limitByBlockSize = MAX_BLOCK_SIZE//(C_dim//C_blocks)
+        return min(max(1, B_dim//32), limitByBlockSize)
 
     def decider_SparseRT(self):
         '''Determine SparseRT related parameters.
@@ -107,7 +108,10 @@ class inputProperty(object):
         self.A_blocks = self.decider_A_Blocks(self.modeBarrier)
         self.C_blocks_input = self.decider_C_Blocks(self.outputDim_input)
         self.C_blocks_hidden = self.decider_C_Blocks(self.outputDim_hidden)
-        self.Gy = self.decider_Gy(self.num_nodes)
+        self.Gy_input = self.decider_Gy(
+            self.num_nodes, self.outputDim_input, self.C_blocks_input)
+        self.Gy_hidden = self.decider_Gy(
+            self.num_nodes, self.outputDim_hidden, self.C_blocks_hidden)
 
     def decider(self):
         '''
@@ -121,8 +125,6 @@ class inputProperty(object):
                 self.dataset_obj.reorder_flag = True
                 self.dataset_obj.rabbit_reorder()
                 self.reorder_status = True
-                self.row_pointers = self.dataset_obj.row_pointers
-                self.column_index = self.dataset_obj.column_index
             else:
                 self.dataset_obj.reorder_flag = False
                 self.reorder_status = False
@@ -186,6 +188,14 @@ class inputProperty(object):
         self.warpPerBlock = self.warpPerBlock_hidden
         self.state_set_input = False
         return self
+
+    def print_param_SpRT(self):
+        print('# modeBarrier: {}'.format(self.modeBarrier))
+        print('# A_blocks: {}'.format(self.A_blocks))
+        print('# Gy_input: {}'.format(self.Gy_input))
+        print('# C_blocks_input: {}'.format(self.C_blocks_input))
+        print('# Gy_hidden: {}'.format(self.Gy_hidden))
+        print('# C_blocks_hidden: {}'.format(self.C_blocks_hidden))
 
     def print_param(self):
         if self.verbose_flag:

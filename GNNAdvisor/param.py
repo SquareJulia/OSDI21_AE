@@ -60,7 +60,7 @@ class inputProperty(object):
         self.part2Node = None
         # SparseRT related
         # self.modeBarrier = math.floor(self.num_nodes*sparseRTRatio)# TODO
-        self.modeBarrier = 200
+        self.modeBarrier = 100
         self.A_blocks = A_blocks
         self.Gy_input = Gy_input
         self.Gy_hidden = Gy_hidden

@@ -57,15 +57,15 @@ def compare_tensor(result, result_ref):
             "MUST compute result and result reference (CPU) first!!")
 
     # equs = torch.eq(result_ref, result.cpu())
-    equs = torch.isclose(result_ref, result.cpu())
+    equs = torch.isclose(result_ref, result.cpu(), atol=0.1)
     correct = torch.sum(equs)
     # print('compute error ratio: {.3f}'.format(1 - correct/result_ref.numel()))
     equal = False
-    if (1 - correct/result_ref.numel()) < 1:
+    if (1 - correct/result_ref.numel()) < 0.1:
         # log.done("# Verification PASSED")
         equal = True
     else:
         log.fail("# Verification FAILED")
-        print('compute error ratio: {.3f}'.format(
+        print('compute error ratio: {:.3f}'.format(
             1 - correct/result_ref.numel()))
     return equal

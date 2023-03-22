@@ -10,7 +10,7 @@ enable_rabbit = True
 manual_mode = False
 # whether to printout more information such as the layerwise parameter.
 verbose_mode = True
-loadFromTxt = False         # whether to load data from a plain txt file.
+loadFromTxt = False       # whether to load data from a plain txt file.
 
 if run_GCN:
     model = 'gcn'

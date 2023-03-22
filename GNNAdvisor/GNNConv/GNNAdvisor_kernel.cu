@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <vector>
 
+#define PROFILE 200
 #define WARP_SIZE 32
 #define checkCudaErrors(err) __checkCudaErrors(err, __FILE__, __LINE__)
 inline void __checkCudaErrors(CUresult err, const char *file, const int line)
@@ -273,6 +274,38 @@ __global__ void spmm_backward_cuda_kernel(
 //     }
 // }
 
+void SparseRT(torch::Tensor BC,
+              torch::Tensor AC,
+              int A_blocks,
+              int C_blocks,
+              int Block_size,
+              long long sprt_cu_function,
+              long long pctx_ptr)
+{
+    CUcontext *ctx_ptr = (CUcontext *)pctx_ptr;
+    // std::cout << "*ctx_ptr:" << *ctx_ptr << std::endl;
+    checkCudaErrors(cuCtxSetCurrent(*ctx_ptr));
+    CUfunction *func_ptr = (CUfunction *)sprt_cu_function;
+
+    float **d_BC, **d_AC;
+    float *tmp;
+    gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
+    gpuErrchk(cudaMalloc((void **)&d_AC, sizeof(float *)));
+    tmp = (float *)(BC.data_ptr());
+    gpuErrchk(cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
+    tmp = (float *)(AC.data_ptr());
+    gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
+    void *args[2] = {&d_BC, &d_AC};
+
+    printf("\nLaunching SparseRT kernel with A_blocks:%d,C_blocks:%d,Block_size:%d\n", A_blocks, C_blocks, Block_size);
+
+    checkCudaErrors(cuLaunchKernel(*func_ptr, A_blocks, C_blocks, 1, // A_blocks x C_blocks x 1 blocks
+                                   Block_size, 1, 1,                 // Block_size x 1 x 1 threads
+                                   0, 0, args, 0));
+    gpuErrchk(cudaFree((void *)d_BC));
+    gpuErrchk(cudaFree((void *)d_AC));
+}
+
 ////////////////////////////////////////////
 //
 // Foward Pass (GCN)  node update --> neighbor aggregation
@@ -299,33 +332,27 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     auto input_weight = torch::mm(input, weight);
     auto output = torch::zeros({input.size(0), weight.size(1)}, torch::kCUDA);
 
+    cudaEvent_t startSpRT, stopSpRT, startAdvisor, stopAdvisor;
+    gpuErrchk(cudaEventCreate(&startSpRT));
+    gpuErrchk(cudaEventCreate(&startAdvisor));
+    gpuErrchk(cudaEventCreate(&stopSpRT));
+    gpuErrchk(cudaEventCreate(&stopAdvisor));
+
+    for (int i = 0; i < PROFILE; i++)
+    {
+        warmup<<<1, 1>>>();
+    }
+    cudaEventRecord(startSpRT, 0);
+
     // Mode 1: SparseRT
 
     if (modeBarrier > 0) // exists element to deal with
     {
-        CUcontext *ctx_ptr = (CUcontext *)pctx_ptr;
-        // std::cout << "*ctx_ptr:" << *ctx_ptr << std::endl;
-        checkCudaErrors(cuCtxSetCurrent(*ctx_ptr));
-        CUfunction *func_ptr = (CUfunction *)sprt_cu_function;
-
-        float **d_BC, **d_AC;
-        float *tmp;
-        gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
-        gpuErrchk(cudaMalloc((void **)&d_AC, sizeof(float *)));
-        tmp = (float *)(input_weight.data_ptr());
-        gpuErrchk(cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
-        tmp = (float *)(output.data_ptr());
-        gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
-        void *args[2] = {&d_BC, &d_AC};
-
-        printf("\nLaunching SparseRT kernel with A_blocks:%d,C_blocks:%d,Block_size:%d\n", A_blocks, C_blocks, Block_size);
-
-        checkCudaErrors(cuLaunchKernel(*func_ptr, A_blocks, C_blocks, 1, // A_blocks x C_blocks x 1 blocks
-                                       Block_size, 1, 1,                 // Block_size x 1 x 1 threads
-                                       0, 0, args, 0));
-        gpuErrchk(cudaFree((void *)d_BC));
-        gpuErrchk(cudaFree((void *)d_AC));
+        SparseRT(input_weight, output, A_blocks, C_blocks, Block_size, sprt_cu_function, pctx_ptr);
     }
+    gpuErrchk(cudaEventRecord(stopSpRT, 0));
+    gpuErrchk(cudaEventSynchronize(stopSpRT));
+    cudaEventRecord(startAdvisor, 0);
 
     // Mode 2: GNNA Neighbour Groups
     if (modeBarrier < output.size(0))
@@ -367,8 +394,14 @@ std::vector<torch::Tensor> spmm_forward_cuda(
             exit(-1);
         }
     }
+    gpuErrchk(cudaEventRecord(stopAdvisor, 0));
+    gpuErrchk(cudaEventSynchronize(stopAdvisor));
+    float msSpRT, msAdvisor;
+    gpuErrchk(cudaEventElapsedTime(&msSpRT, startSpRT, stopSpRT));
+    gpuErrchk(cudaEventElapsedTime(&msAdvisor, startAdvisor, stopAdvisor));
 
-    cudaDeviceSynchronize();
+    printf("GCN forward kernel Time (ms): %.3f(SparseRT)+%.3f(GNNA)=%.3f\n", msSpRT, msAdvisor, msSpRT + msAdvisor);
+    printf("\n================================\n");
 
     return {output};
 }
@@ -490,33 +523,28 @@ std::vector<torch::Tensor> spmm_backward_cuda(
 
     auto d_input_prime = torch::zeros_like(d_output);
 
+    cudaEvent_t startSpRT, stopSpRT, startAdvisor, stopAdvisor;
+    gpuErrchk(cudaEventCreate(&startSpRT));
+    gpuErrchk(cudaEventCreate(&startAdvisor));
+    gpuErrchk(cudaEventCreate(&stopSpRT));
+    gpuErrchk(cudaEventCreate(&stopAdvisor));
+
+    for (int i = 0; i < PROFILE; i++)
+    {
+        warmup<<<1, 1>>>();
+    }
+    cudaEventRecord(startSpRT, 0);
+
     // Mode 1: SparseRT
 
     if (modeBarrier > 0) // exists element to deal with
     {
-        CUcontext *ctx_ptr = (CUcontext *)pctx_ptr;
-        // std::cout << "*ctx_ptr:" << *ctx_ptr << std::endl;
-        checkCudaErrors(cuCtxSetCurrent(*ctx_ptr));
-        CUfunction *func_ptr = (CUfunction *)sprt_cu_function;
-
-        float **d_BC, **d_AC;
-        float *tmp;
-        gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
-        gpuErrchk(cudaMalloc((void **)&d_AC, sizeof(float *)));
-        tmp = (float *)(d_output.data_ptr());
-        gpuErrchk(cudaMemcpy(d_BC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
-        tmp = (float *)(d_input_prime.data_ptr());
-        gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
-        void *args[2] = {&d_BC, &d_AC};
-
-        // printf("\nLaunching SparseRT kernel with A_blocks:%d,C_blocks:%d,Block_size:%d\n", A_blocks, C_blocks, Block_size);
-
-        checkCudaErrors(cuLaunchKernel(*func_ptr, A_blocks, C_blocks, 1, // A_blocks x C_blocks x 1 blocks
-                                       Block_size, 1, 1,                 // Block_size x 1 x 1 threads
-                                       0, 0, args, 0));
-        gpuErrchk(cudaFree((void *)d_BC));
-        gpuErrchk(cudaFree((void *)d_AC));
+        SparseRT(d_output, d_input_prime, A_blocks, C_blocks, Block_size, sprt_cu_function, pctx_ptr);
     }
+
+    gpuErrchk(cudaEventRecord(stopSpRT, 0));
+    gpuErrchk(cudaEventSynchronize(stopSpRT));
+    cudaEventRecord(startAdvisor, 0);
 
     // Mode 2: GNNA Neighbour Groups
     if (modeBarrier < d_output.size(0))
@@ -555,7 +583,14 @@ std::vector<torch::Tensor> spmm_backward_cuda(
             exit(-1);
         }
     }
-    cudaDeviceSynchronize();
+    gpuErrchk(cudaEventRecord(stopAdvisor, 0));
+    gpuErrchk(cudaEventSynchronize(stopAdvisor));
+    float msSpRT, msAdvisor;
+    gpuErrchk(cudaEventElapsedTime(&msSpRT, startSpRT, stopSpRT));
+    gpuErrchk(cudaEventElapsedTime(&msAdvisor, startAdvisor, stopAdvisor));
+
+    printf("GCN backward kernel Time (ms)(SparseRT+GNNA): %.3f + %.3f = %.3f\n", msSpRT, msAdvisor, msSpRT + msAdvisor);
+    printf("\n================================\n");
 
     auto d_input = torch::mm(d_input_prime, W.transpose(0, 1));
     auto d_weight = torch::mm(X.transpose(0, 1), d_input_prime);

@@ -40,6 +40,8 @@ class GNNAFunction(torch.autograd.Function):
         ctx.partSize, ctx.dimWorker, ctx.warpPerBlock = \
             inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock
 
+        ctx.a_hat_hat_for_test = a_hat_hat_for_test
+
         # print("[Foward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,
         #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
         # print("[Foward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
@@ -69,9 +71,6 @@ class GNNAFunction(torch.autograd.Function):
         # print(X.size())
         # print(weight.size())
         # X_prime = torch.mm(X, weight)
-        # X_prime = GNNA.SAG(X_prime, inputInfo.row_pointers, inputInfo.column_index,
-        #                     inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-        #                         inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
         return X_prime
 
     @staticmethod
@@ -80,6 +79,7 @@ class GNNAFunction(torch.autograd.Function):
         inputInfo = ctx.inputInfo
         SpRT_layer = ctx.SpRT_layer
 
+        a_hat_hat_for_test = ctx.a_hat_hat_for_test
         # print("[Backward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,         #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
 
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
@@ -90,9 +90,27 @@ class GNNAFunction(torch.autograd.Function):
                                           ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
                                           SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
                                           SpRT_layer.Block_size, SpRT_layer.ctx.getPtr(), inputInfo.modeBarrier)
-        # d_X_prime = GNNA.SAG(d_output, inputInfo.row_pointers, inputInfo.column_index,
-        #                             inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node, \
-        #                                 inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock)
+
+        d_X_prime_ref = torch.mm(a_hat_hat_for_test, d_output.cpu())
+        d_input_ref = torch.mm(d_X_prime_ref, weight.permute(1, 0).cpu())
+        d_weight_ref = torch.mm(X.permute(1, 0).cpu(), d_X_prime_ref)
+        if not compare_tensor(d_input, d_input_ref) or not compare_tensor(d_weight, d_weight_ref):
+            torch.set_printoptions(precision=4, sci_mode=False)
+            print('d_input:')
+            print(d_input)
+            print('d_input_ref:')
+            print(d_input_ref)
+            print('d_weight:')
+            print(d_weight)
+            print('d_weight_ref:')
+            print(d_weight_ref)
+            print('a_hat_hat:')
+            print(a_hat_hat_for_test)
+            print('d_output:')
+            print(d_output)
+            print('d_X_prime_ref:')
+            print(d_X_prime_ref)
+
         # print(weight.size())
         # weight_p = weight.permute(1,0)
         # print(weight_p.size())

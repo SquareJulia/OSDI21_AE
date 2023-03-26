@@ -36,3 +36,15 @@ def bin_to_half(bin_string):
     mantissa = int(bin_string[6:],2)
     factor = 10 ** np.ceil(np.log10(mantissa))
     return (-1) ** sign * 2 ** (exponent - 15) * (1 + mantissa /factor)
+
+
+def load_adj_list(path):
+    ''' Read the adjacency list from path in txt mode.
+        Each element in row i represents a neighbour of vertex i.
+        Return the restored adj_list(list[list[]]).
+    '''
+    adj_list=[]
+    with open(path,'r') as f:
+        for line in f.readlines():
+            adj_list.append([float(f) for f in line.split()])
+    return adj_list

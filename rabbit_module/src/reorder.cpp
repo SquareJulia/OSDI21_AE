@@ -233,8 +233,9 @@ std::map<int, int> reorder(adjacency_list adj) {
 #define CHECK_INPUT(x) CHECK_CONTIGUOUS(x)
 
 torch::Tensor rabbit_reorder(
-    torch::Tensor in_edge_index
-) {
+    torch::Tensor in_edge_index,
+    int barrier)
+{
   int src, dst;
 
   using boost::adaptors::transformed;
@@ -251,7 +252,10 @@ torch::Tensor rabbit_reorder(
   for(int i = 0; i < numedges; i++){
     src = in_edge_index_ptr[0][i];
     dst = in_edge_index_ptr[1][i];
-    edges.push_back(std::make_tuple(src, dst, 1.0f));
+    if (src < barrier && dst < barrier)
+    {
+      edges.push_back(std::make_tuple(src, dst, 1.0f));
+    }
   }
 
   // output edge index.
@@ -273,17 +277,18 @@ torch::Tensor rabbit_reorder(
   std::cerr << "Number of edges: "    << m          << std::endl;
   auto mapping = reorder(std::move(adj));
 
-  // for(auto it = mapping.cbegin(); it != mapping.cend(); ++it)
+  // for (auto it = mapping.cbegin(); it != mapping.cend(); ++it)
   // {
-  //     std::cout << it->first << " " << it->second << "\n";
+  //   std::cout << it->first << " " << it->second << "\n";
   // }
+  // std::cout << '\n';
 
   // generate the edge_list.
   for(int i = 0; i < numedges; i++){
-    src = std::get<0>(edges[i]);
-    dst = std::get<1>(edges[i]);
-    out_edge_index_ptr[0][i] = mapping[src];
-    out_edge_index_ptr[1][i] = mapping[dst];
+    src = in_edge_index_ptr[0][i];
+    dst = in_edge_index_ptr[1][i];
+    out_edge_index_ptr[0][i] = src < barrier ? mapping[src] : src;
+    out_edge_index_ptr[1][i] = dst < barrier ? mapping[dst] : dst;
   }
 
   return out_edge_index;

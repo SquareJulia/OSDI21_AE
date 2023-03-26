@@ -52,6 +52,9 @@ def first_ge(alist, threshold):
 
 
 def compare_tensor(result, result_ref):
+    ''' Compare the result with result_ref.
+        Return True if they are almost equal.
+    ''' 
     if result_ref is None or result is None:
         raise ValueError(
             "MUST compute result and result reference (CPU) first!!")
@@ -69,3 +72,14 @@ def compare_tensor(result, result_ref):
         print('compute error ratio: {:.3f}'.format(
             1 - correct/result_ref.numel()))
     return equal
+
+
+def save_adj_list(adj_list,path):
+    ''' Save the adj_list(list[list[]]) in txt mode.
+    '''
+    txt_adj_list=''
+    for row in adj_list:
+        txt_adj_list+=' '.join(str(f) for f in row)
+        txt_adj_list+='\n'
+    with open(path,'w') as f:
+        f.write(txt_adj_list)

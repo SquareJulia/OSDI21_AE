@@ -40,8 +40,27 @@ parser.add_argument("--num_epoches", type=int, default=200,
                     help="number of epoches for training, default=200")
 
 # Manually set the performance related parameters
-parser.add_argument("--partSize", type=int, default=32,
-                    help="neighbor-group size")
+# Mode-divergence related
+parser.add_argument("--density", type=float, default=0.001,
+                    help="Density threshold for splitting the adjacency matrix into dense and sparse tiles. Default:0.001")
+parser.add_argument("--A_tileDim", type=int, default=80,
+                    help="Dim of each subtile of A in the spliited adjacency matrix AB. Default:80")
+parser.add_argument("--B_tileDim", type=int, default=80,
+                    help="Dim of each subtile of B in the spliited adjacency matrix AB. Default:80")
+# SparseRT related
+parser.add_argument("--A_blockDim", type=int, default=8,
+                    help="(SparseRT) Per-block workload of dims of A in the spliited adjacency matrix AB. Default:8")
+parser.add_argument("--Gy_input", type=int, default=1,
+                    help="(SparseRT) Number of thread groups for each A_block, input-layer. Default:1")
+parser.add_argument("--Gy_hidden", type=int, default=1,
+                    help="(SparseRT) Number of thread groups for each A_block, hidden-layer. Default:1")
+parser.add_argument("--C_blocks_input", type=int, default=1,
+                    help="(SparseRT) Number of thread blocks to deal with the input-layer C_dim. Default:1")
+parser.add_argument("--C_blocks_hidden", type=int, default=1,
+                    help="(SparseRT) Number of thread blocks to deal with the hidden-layer C_dim. Default:1")
+# GNNAdvisor related
+arser.add_argument("--partSize", type=int, default=32,
+                   help="neighbor-group size")
 parser.add_argument("--dimWorker", type=int, default=32,
                     help="number of worker threads (MUST < 32)")
 parser.add_argument("--warpPerBlock", type=int, default=4,
@@ -49,13 +68,13 @@ parser.add_argument("--warpPerBlock", type=int, default=4,
 parser.add_argument("--sharedMem", type=int, default=100,
                     help="shared memory size of each block (Quadro P6000 64(KB) sm_61), default=100(KB) for RTX3090 sm_86")
 
+
 # Additional flags for studies.
 parser.add_argument('--manual_mode', type=str, choices=[
                     'True', 'False'], default='True', help="True: use manual config, False: auto config, default: True")
 parser.add_argument('--verbose_mode', type=str, choices=[
                     'True', 'False'], default='False', help="True: verbose mode, False: simple mode, default: False")
-parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False',
-                    help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
+
 parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], default='False',
                     help="True: load the graph TXT edge list, False: load from .npy, default: False (load from npz fast)")
 parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], default='False',
@@ -63,13 +82,25 @@ parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False',
                     help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
+parser.add_argument('--enable_sort_by_degree', type=str, choices=['True', 'False'], default='False',
+                    help="True: enable reordering by degrees, False, disable reordering by degrees, default: False (disable for both manual and auto mode).")
+parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False',
+                    help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
+parser.add_argument("--rabbitRatio", type=float, default=0.8,
+                    help="Ratio of (possibly reordered by degree descending) vertices to be reordered by rabbit, default=0.8")
+
+
 args = parser.parse_args()
 print(args)
 
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
+A_blockDim, Gy_input, Gy_hidden, C_blocks_input, C_blocks_hidden = args.A_blockDim, args.Gy_input, args.Gy_hidden, args.C_blocks_input, args.C_blocks_hidden
+rabbitRatio = args.rabbitRatio
+density, A_tileDim, B_tileDim = args.density, args.A_tileDim, args.B_tileDim
 manual_mode = args.manual_mode == 'True'
 verbose_mode = args.verbose_mode == 'True'
 enable_rabbit = args.enable_rabbit == 'True'
+enable_sort_by_degree = args.enable_sort_by_degree == 'True'
 loadFromTxt = args.loadFromTxt == 'True'
 single_spmm = args.single_spmm == 'True'
 verify_spmm = args.verify_spmm == 'True'
@@ -95,9 +126,10 @@ else:
 ####################################
 # Building input property profile.
 ####################################
-inputInfo = inputProperty(partSize, dimWorker, warpPerBlock, sharedMem,
-                          hiddenDim=args.hidden, dataset_obj=dataset, enable_rabbit=enable_rabbit,
-                          manual_mode=manual_mode, verbose=verbose_mode)
+inputInfo = inputProperty(args.hidden,dataset,manual_mode,verbose_mode,
+                enable_rabbit,enable_sort_by_degree,rabbitRatio,
+                partSize,dimWorker,warpPerBlock,sharedMem,
+                A_blockDim,Gy_input,Gy_hidden,C_blocks_input,C_blocks_hidden)
 
 ####################################
 # Decider for parameter selection.

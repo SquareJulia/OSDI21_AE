@@ -10,6 +10,7 @@ from scipy.sparse import *
 import rabbit
 from constants import SPARSERT_MATERIALS_NPYS_DIR, SPARSERT_MATERIALS_DIST_DIR
 import log
+from graph_utils import *
 
 
 def func(x):
@@ -40,7 +41,8 @@ class custom_dataset(torch.nn.Module):
         self.num_classes = num_class
         self.edge_index = None
 
-        self.reorder_flag = False
+        self.reorder_rabbit_flag = False
+        self.reorder_by_degree_flag = False
         self.verbose_flag = verbose
 
         self.avg_degree = -1
@@ -80,8 +82,7 @@ class custom_dataset(torch.nn.Module):
                 self.nodes.add(src)
                 self.nodes.add(dst)
 
-            self.num_nodes = max(self.nodes) + 1
-            self.edge_index = np.stack([src_li, dst_li])
+            self.num_nodes = max(self.nodes) + 1  # buggy
 
             dur = time.perf_counter() - start
             if self.verbose_flag:
@@ -116,9 +117,10 @@ class custom_dataset(torch.nn.Module):
         dst_li = np.concatenate((dst_li, [i for i in range(self.num_nodes)]))
         self.edge_index = np.stack([src_li, dst_li])
         self.num_edges += self.num_nodes
+        self.degrees = degrees_from_edge_index(self.edge_index, self.num_nodes)
 
-        self.val = [1] * self.num_edges
-        self.generate_csr_and_degrees()
+        # self.val = [1] * self.num_edges
+        # self.generate_csr_and_degrees()
 
     def init_embedding(self, dim):
         '''
@@ -134,29 +136,51 @@ class custom_dataset(torch.nn.Module):
         '''
         self.y = torch.ones(self.num_nodes).long().cuda()
 
-    def rabbit_reorder(self):
+    def degree_reorder(self):
         '''
         If the decider set this reorder flag,
-        then reorder and rebuild a graph CSR.
+        then reorder and rebuild an edge_index,
         otherwise skipped this reorder routine.
         Called from external.
         '''
-        if not self.reorder_flag:
+        if not self.reorder_by_degree_flag:
             if self.verbose_flag:
-                log.info("Reorder flag is not set. Skipped...")
+                log.info('Degree reorder flag is not set. Skipped...')
         else:
             if self.verbose_flag:
-                log.info("Reorder flag is set. Continue...")
-                print("Original edge_index:\n", self.edge_index)
+                log.info('Degree reorder flag is set. Continue...')
+                print('Original edge_index:\n', self.edge_index)
             start = time.perf_counter()
-            self.edge_index = rabbit.reorder(torch.IntTensor(self.edge_index))
+            reorder_by_degree(self.edge_index, self.degrees)
             reorder_time = time.perf_counter() - start
 
             if self.verbose_flag:
-                log.done("# Reorder time (s): {}".format(reorder_time))
+                log.done(
+                    "# Reorder by degree time (s): {:.3f}".format(reorder_time))
                 print("Reordered edge_index:\n", self.edge_index)
 
-            self.generate_csr_and_degrees()
+    def rabbit_reorder(self, modeBarrier):
+        '''
+        If the decider set this reorder flag,
+        then reorder and rebuild an edge_index.
+        otherwise skipped this reorder routine.
+        Called from external.
+        '''
+        if not self.reorder_rabbit_flag:
+            if self.verbose_flag:
+                log.info("Rabbit-reorder flag is not set. Skipped...")
+        else:
+            if self.verbose_flag:
+                log.info("Rabbit-reorder flag is set. Continue...")
+                print("Original edge_index:\n", self.edge_index)
+            start = time.perf_counter()
+            self.edge_index = rabbit.reorder(
+                torch.IntTensor(self.edge_index), modeBarrier)
+            reorder_time = time.perf_counter() - start
+
+            if self.verbose_flag:
+                log.done("# Reorder time (s): {:.3f}".format(reorder_time))
+                print("Reordered edge_index:\n", self.edge_index)
 
     def generate_csr_and_degrees(self):
         '''
@@ -240,10 +264,23 @@ class custom_dataset(torch.nn.Module):
             log.done('transposed A^ saved at:{}'.format(npy_path))
         return npy_path
 
+    def print_adj_matrix(self):
+        val = [1] * self.num_edges
+        scipy_coo = coo_matrix((val, self.edge_index),
+                               shape=(self.num_nodes, self.num_nodes))
+        print(scipy_coo.toarray().astype('float32'))
+
 
 if __name__ == '__main__':
     # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "cora.npz")
-    path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "amazon0505.npz")
-    dataset = custom_dataset(path, 16, 10, load_from_txt=False)
-    dataset.reorder_flag = True
-    dataset.rabbit_reorder()
+    # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "amazon0505.npz")
+    path = osp.join(
+        "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "g6nodes.txt")
+    dataset = custom_dataset(path, 16, 10, load_from_txt=True, verbose=True)
+    dataset.reorder_rabbit_flag = True
+    dataset.reorder_by_degree_flag = True
+    dataset.print_adj_matrix()
+    dataset.degree_reorder()
+    dataset.print_adj_matrix()
+    dataset.rabbit_reorder(4)
+    dataset.print_adj_matrix()

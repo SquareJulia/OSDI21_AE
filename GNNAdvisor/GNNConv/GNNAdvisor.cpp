@@ -32,8 +32,7 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr,
-    int modeBarrier);
+    long long pctx_ptr);
 
 std::vector<torch::Tensor> spmm_backward_cuda(
     torch::Tensor d_output,
@@ -51,8 +50,7 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr,
-    int modeBarrier);
+    long long pctx_ptr);
 
 // #define CHECK_CUDA(x) TORCH_CHECK(x.type().is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CUDA(x) TORCH_CHECK(x.device().is_cuda(), #x " must be a CUDA tensor")
@@ -105,8 +103,7 @@ std::vector<torch::Tensor> spmm_forward(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr,
-    int modeBarrier)
+    long long pctx_ptr)
 {
   CHECK_INPUT(input);
   CHECK_INPUT(weight);
@@ -120,7 +117,7 @@ std::vector<torch::Tensor> spmm_forward(
                            degrees, part_pointers, part2Node,
                            partSize, dimWorker, warpPerBlock,
                            sprt_cu_function, A_blocks, C_blocks, Block_size,
-                           pctx_ptr, modeBarrier);
+                           pctx_ptr);
 }
 
 std::vector<torch::Tensor> spmm_backward(
@@ -139,8 +136,7 @@ std::vector<torch::Tensor> spmm_backward(
     int A_blocks,
     int C_blocks,
     int Block_size,
-    long long pctx_ptr,
-    int modeBarrier)
+    long long pctx_ptr)
 {
 
   CHECK_INPUT(d_output);
@@ -156,20 +152,18 @@ std::vector<torch::Tensor> spmm_backward(
                             degrees, part_pointers, part2Node,
                             partSize, dimWorker, warpPerBlock,
                             sprt_cu_function, A_blocks, C_blocks, Block_size,
-                            pctx_ptr, modeBarrier);
+                            pctx_ptr);
 }
 
 std::vector<torch::Tensor> build_part(
     int partSize,
-    torch::Tensor indptr,
-    int modeBarrier)
+    torch::Tensor indptr)
 {
-
   auto indptr_acc = indptr.accessor<int, 1>();
   int num_nodes = indptr.size(0) - 1;
   int degree, thisNumParts, numParts = 0;
 
-  for (int i = modeBarrier; i < num_nodes; i++)
+  for (int i = 0; i < num_nodes; i++)
   {
     int degree = indptr_acc[i + 1] - indptr_acc[i];
     if (degree % partSize == 0)
@@ -183,7 +177,7 @@ std::vector<torch::Tensor> build_part(
   auto part2Node = torch::zeros(numParts);
 
   int part_counter = 0;
-  for (int i = modeBarrier; i < num_nodes; i++)
+  for (int i = 0; i < num_nodes; i++)
   {
     int degree = indptr_acc[i + 1] - indptr_acc[i];
     if (degree % partSize == 0)

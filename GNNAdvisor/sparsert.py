@@ -6,11 +6,14 @@ import log
 
 
 class SparseRTLayer():
-    def __init__(self, BA_npy, inputInfo, C_dim, C_blocks, Gy, verbose):
-        self.BA_npy = BA_npy
+    def __init__(self, degrees_file, AB_file, inputInfo, C_dim, C_blocks, Gy, verbose):
+        self.degrees_file = degrees_file
+        self.AB_file = AB_file
 
-        self.A_dim = inputInfo.modeBarrier
-        self.A_blocks = inputInfo.A_blocks
+        self.A_dim = inputInfo.dataset_obj.A_dim
+        A_blockDim = inputInfo.A_blockDim
+        assert self.A_dim % A_blockDim == 0
+        self.A_blocks = self.A_dim//A_blockDim
         self.B_dim = inputInfo.num_nodes
 
         self.C_dim = C_dim
@@ -27,8 +30,8 @@ class SparseRTLayer():
     def gen_ptx(self):
         gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
     --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
-        --infile {} --outfile {}"\
-            .format(self.A_dim, self.B_dim, self.C_dim, self.A_blocks, self.C_blocks, self.Gy, self.BA_npy, self.ptx_file)
+        --degrees_file {} --AB_file {} --outfile {}"\
+            .format(self.A_dim, self.B_dim, self.C_dim, self.A_blocks, self.C_blocks, self.Gy, self.degrees_file, self.AB_file, self.ptx_file)
         if self.verbose:
             log.info('+ generating ptx with C_dim:{}...'.format(self.C_dim))
             print(gen_ptx_command)
@@ -57,8 +60,8 @@ class SparseRTLayer():
             remove_files_if_exists(self.ptx_file, self.cubin_file)
 
     def gen_ptx_and_cubin(self):
-        dist_without_suffix = self.BA_npy.replace(
-            'npys', 'dist').split('.npy')[0]
+        dist_without_suffix = self.AB_file.replace(
+            'data', 'dist').split('.npz')[0]
         self.ptx_file = '{}_{}.ptx'.format(dist_without_suffix, self.C_dim)
         self.cubin_file = '{}_{}.cubin'.format(dist_without_suffix, self.C_dim)
         self.prepare_dist_path(osp.dirname(self.ptx_file))

@@ -1,5 +1,6 @@
 import struct
 import numpy as np
+from scipy.sparse import *
 EPS = 0.0000001
 ST = 1
 
@@ -38,13 +39,25 @@ def bin_to_half(bin_string):
     return (-1) ** sign * 2 ** (exponent - 15) * (1 + mantissa /factor)
 
 
-def load_adj_list(path):
-    ''' Read the adjacency list from path in txt mode.
-        Each element in row i represents a neighbour of vertex i.
-        Return the restored adj_list(list[list[]]).
+# def load_adj_list(path):
+#     ''' Read the adjacency list from path in txt mode.
+#         Each element in row i represents a neighbour of vertex i.
+#         Return the restored adj_list(list[list[]]).
+#     '''
+#     adj_list=[]
+#     with open(path,'r') as f:
+#         for line in f.readlines():
+#             adj_list.append([float(f) for f in line.split()])
+#     return adj_list
+
+def indices_of_csc(csc):
+    ''' Extract row indices and column indices from csc_array(column-wise).
+        Return: row_indices(ndarray), col_indices(ndarray)
     '''
-    adj_list=[]
-    with open(path,'r') as f:
-        for line in f.readlines():
-            adj_list.append([float(f) for f in line.split()])
-    return adj_list
+    row_indices = csc.indices
+    col_counts=np.diff(csc.indptr)
+    col_indices=[]
+    for [col,col_count] in enumerate(col_counts):
+        col_indices+=[col]*col_count
+    col_indices=np.array(col_indices)
+    return row_indices,col_indices

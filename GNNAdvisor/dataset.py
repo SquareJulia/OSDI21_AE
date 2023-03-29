@@ -8,7 +8,7 @@ import os
 
 from scipy.sparse import *
 import rabbit
-from constants import SPARSERT_MATERIALS_NPYS_DIR, SPARSERT_MATERIALS_DIST_DIR
+from constants import SPARSERT_MATERIALS_DATA_DIR, SPARSERT_MATERIALS_DIST_DIR
 import log
 from graph_utils import *
 
@@ -117,7 +117,12 @@ class custom_dataset(torch.nn.Module):
         dst_li = np.concatenate((dst_li, [i for i in range(self.num_nodes)]))
         self.edge_index = np.stack([src_li, dst_li])
         self.num_edges += self.num_nodes
-        self.degrees = degrees_from_edge_index(self.edge_index, self.num_nodes)
+        if self.verbose_flag:
+            log.info('# edges: {}'.format(self.num_edges))
+        self.avg_density = self.num_edges/(self.num_nodes*self.num_nodes)
+        self.degrees_cpu = degrees_from_edge_index(
+            self.edge_index, self.num_nodes)
+        self.degrees_gpu = None
 
         # self.val = [1] * self.num_edges
         # self.generate_csr_and_degrees()
@@ -149,17 +154,17 @@ class custom_dataset(torch.nn.Module):
         else:
             if self.verbose_flag:
                 log.info('Degree reorder flag is set. Continue...')
-                print('Original edge_index:\n', self.edge_index)
+                # print('Original edge_index:\n', self.edge_index)
             start = time.perf_counter()
-            reorder_by_degree(self.edge_index, self.degrees)
+            reorder_by_degree(self.edge_index, self.degrees_cpu)
             reorder_time = time.perf_counter() - start
 
             if self.verbose_flag:
                 log.done(
                     "# Reorder by degree time (s): {:.3f}".format(reorder_time))
-                print("Reordered edge_index:\n", self.edge_index)
+                # print("Reordered edge_index:\n", self.edge_index)
 
-    def rabbit_reorder(self, modeBarrier):
+    def rabbit_reorder(self, rabbitBarrier):
         '''
         If the decider set this reorder flag,
         then reorder and rebuild an edge_index.
@@ -172,103 +177,93 @@ class custom_dataset(torch.nn.Module):
         else:
             if self.verbose_flag:
                 log.info("Rabbit-reorder flag is set. Continue...")
-                print("Original edge_index:\n", self.edge_index)
+                # print("Original edge_index:\n", self.edge_index)
             start = time.perf_counter()
             self.edge_index = rabbit.reorder(
-                torch.IntTensor(self.edge_index), modeBarrier)
+                torch.IntTensor(self.edge_index), rabbitBarrier)
             reorder_time = time.perf_counter() - start
 
             if self.verbose_flag:
                 log.done("# Reorder time (s): {:.3f}".format(reorder_time))
-                print("Reordered edge_index:\n", self.edge_index)
+                # print("Reordered edge_index:\n", self.edge_index)
 
-    def generate_csr_and_degrees(self):
-        '''
-        Generate a new graph CSR and degrees array according to the updated edge_index.
-        '''
-        start = time.perf_counter()
-
-        scipy_coo = coo_matrix((self.val, self.edge_index),
-                               shape=(self.num_nodes, self.num_nodes))
-        self.a_hat = scipy_coo.toarray().astype('float32')
-        scipy_csr = scipy_coo.tocsr()
-        self.column_index = torch.IntTensor(scipy_csr.indices)
-        self.row_pointers = torch.IntTensor(scipy_csr.indptr)
-        build_csr = time.perf_counter() - start
-
-        # Re-generate degrees array.
-        degrees = (self.row_pointers[1:] - self.row_pointers[:-1]).tolist()
-        self.degrees = (1.0/torch.sqrt(torch.FloatTensor(
-            list(map(func, degrees))))).cuda()
-
-        # print('-------')
-        # print('degrees:')
-        # print(self.degrees)
-        # print('-------')
-        # print('A_hat:')
-        # print(self.a_hat)
-        # print('-------')
-        # print('column_index:')
-        # print(self.column_index)
-        # print('-------')
-        # print('row_pointers:')
-        # print(self.row_pointers)
-
+    def split_by_density(self, density, TILE_ROW, TILE_COL):
+        self.dense_adj, self.sparse_adj = split_adj_list_by_density(
+            self.adj_list, density, TILE_ROW, TILE_COL, self.num_nodes)
+        self.A_dim = len(self.sparse_adj)
         if self.verbose_flag:
-            print("# Re-Build CSR (s): {:.3f}".format(build_csr))
+            log.done('=> Splitted the adjacency list!')
+            # print('dense_adj:')
+            # print(adj_list_to_adj_matrix(self.dense_adj, self.num_nodes))
+            # print('sparse_adj:')
+            # print(adj_list_to_adj_matrix(self.sparse_adj, self.num_nodes))
 
-    def a_times_d(self, modeBarrier=None):
-        '''
-        Return D^A^D^ for [0, modeBarrier) lines of A_hat (for SparseRT).
-        For GNNA, this step will be conducted in the GPU kernel.
-        '''
-        modeBarrier = modeBarrier if modeBarrier is not None else self.num_nodes
-        a_hat_hat = self.a_hat[0:modeBarrier].copy()
-        for row in range(modeBarrier):
-            for col_idx_idx in range(self.row_pointers[row], self.row_pointers[row+1]):
-                col = self.column_index[col_idx_idx].item()
-                a_hat_hat[row][col] *= self.degrees[row].item()
-                a_hat_hat[row][col] *= self.degrees[col].item()
-        return a_hat_hat
+    def GNNA_gen_csr(self):
+        ''' Generate CSR representation(torch.IntTensor) for the workload of GNNAdvisor.'''
+        self.dense_row_pointers, self.dense_column_index = adj_list_to_csr(
+            self.dense_adj)
 
-    def save_transposed_sparse_matrix_npy(self, modeBarrier):
+    def gen_degrees_hat(self):
         '''
-        Save [0,modeBarrier) lines of D^A^D^ in '.npy' format for sparseRT.
+        Generate a new degrees array according to the updated edge_index.
+        Note: degrees(D_hat) equals (D+I)^{-1/2}
+        '''
+        degrees = degrees_from_edge_index(self.edge_index, self.num_nodes)
+        self.degrees_cpu = (1.0/torch.sqrt(torch.FloatTensor(
+            list(map(func, degrees)))))
+
+    def calc_d_a_d(self):
+        '''
+        Return D^A^D^ in array format of A_hat (for test).
+        '''
+        a_coo_matrix = adj_list_to_coo_matrix(self.adj_list, self.num_nodes)
+        degrees_coo_matrix = diags([self.degrees_cpu.numpy()], [0])
+        d_a_d = degrees_coo_matrix*a_coo_matrix*degrees_coo_matrix
+        return d_a_d.toarray()
+
+    def save_degrees_hat(self, basename):
+        '''
+        Save D~^{-1/2} in '.npy' format for sparseRT.
         Return: file name of '.npy'.
         '''
-        if modeBarrier == 0:
-            return ''
-        if self.verbose_flag:
-            log.info('# Saving transposed A^(i.e.D^A^D^) for sparseRT')
-            # print('=== original A^:')
-            # torch.set_printoptions(precision=2)
-            # print(self.a_hat)
-        a_hat_hat = self.a_times_d(modeBarrier)
-        # if self.verbose_flag:
-        # print('=== D^A^D^:')
-        # torch.set_printoptions(precision=2)
-        # print(a_hat_hat)
+        path = '{}_degrees.npy'.format(basename)
+        if osp.isfile(path):
+            os.remove(path)
+        np.save(path, self.degrees_cpu.numpy())
+        return path
 
-        npy_dir = '{}{}'.format(
-            SPARSERT_MATERIALS_NPYS_DIR, osp.dirname(self.path).split('../')[1])
-        if not osp.exists(npy_dir):
-            os.makedirs(npy_dir)
-        npy_basename = '{}_{}.npy'.format(
-            osp.basename(self.path).split('.')[0], modeBarrier)
-        npy_path = osp.join(npy_dir, npy_basename)
-        if os.path.isfile(npy_path):
-            os.remove(npy_path)
+    def save_AB(self, basename):
+        path = '{}_AB.npz'.format(basename)
+        if osp.isfile(path):
+            os.remove(path)
+        self.AB_coo_matrix = adj_list_to_coo_matrix(
+            self.sparse_adj, self.num_nodes)
+        log.info('SparseRT nnz count:{}'.format(
+            self.AB_coo_matrix.count_nonzero()))
+        save_npz(path, self.AB_coo_matrix)
+        return path
 
-        np.save(npy_path, np.transpose(a_hat_hat))
+    def save_for_sparsert(self):
+        '''
+        Save D^ and AB for sparseRT.
+                degrees: D~^{-1/2} in '.npy' format
+                AB: coo_matrix in '.npz' format
+        Return: file names of degrees and AB
+        '''
         if self.verbose_flag:
-            log.done('transposed A^ saved at:{}'.format(npy_path))
-        return npy_path
+            log.info('# Saving D^ and AB for sparseRT')
+        dest_dir = '{}{}'.format(
+            SPARSERT_MATERIALS_DATA_DIR, osp.dirname(self.path).split('../')[1])
+        if not osp.exists(dest_dir):
+            os.makedirs(dest_dir)
+        basename = osp.join(dest_dir, osp.basename(self.path).split('.')[0])
+        return self.save_degrees_hat(basename), self.save_AB(basename)
+
+    def edge_index_to_adj_list(self):
+        self.adj_list = edge_index_to_adj_list(self.edge_index, self.num_nodes)
 
     def print_adj_matrix(self):
-        val = [1] * self.num_edges
-        scipy_coo = coo_matrix((val, self.edge_index),
-                               shape=(self.num_nodes, self.num_nodes))
-        print(scipy_coo.toarray().astype('float32'))
+        print(edge_index_to_adj_matrix(self.edge_index, self.num_nodes))
 
 
 if __name__ == '__main__':
@@ -277,10 +272,15 @@ if __name__ == '__main__':
     path = osp.join(
         "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "g6nodes.txt")
     dataset = custom_dataset(path, 16, 10, load_from_txt=True, verbose=True)
+    # reorder
     dataset.reorder_rabbit_flag = True
     dataset.reorder_by_degree_flag = True
     dataset.print_adj_matrix()
     dataset.degree_reorder()
     dataset.print_adj_matrix()
-    dataset.rabbit_reorder(4)
+    dataset.rabbit_reorder(rabbitBarrier=4)
     dataset.print_adj_matrix()
+    dataset.edge_index_to_adj_list()
+    # split
+    dataset.split_by_density(0, 2, 2)
+    # GNNA

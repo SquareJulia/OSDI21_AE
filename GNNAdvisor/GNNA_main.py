@@ -59,8 +59,8 @@ parser.add_argument("--C_blocks_input", type=int, default=1,
 parser.add_argument("--C_blocks_hidden", type=int, default=1,
                     help="(SparseRT) Number of thread blocks to deal with the hidden-layer C_dim. Default:1")
 # GNNAdvisor related
-arser.add_argument("--partSize", type=int, default=32,
-                   help="neighbor-group size")
+parser.add_argument("--partSize", type=int, default=32,
+                    help="neighbor-group size")
 parser.add_argument("--dimWorker", type=int, default=32,
                     help="number of worker threads (MUST < 32)")
 parser.add_argument("--warpPerBlock", type=int, default=4,
@@ -86,7 +86,7 @@ parser.add_argument('--enable_sort_by_degree', type=str, choices=['True', 'False
                     help="True: enable reordering by degrees, False, disable reordering by degrees, default: False (disable for both manual and auto mode).")
 parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False',
                     help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
-parser.add_argument("--rabbitRatio", type=float, default=0.8,
+parser.add_argument("--rabbitRatio", type=float, default=0.5,
                     help="Ratio of (possibly reordered by degree descending) vertices to be reordered by rabbit, default=0.8")
 
 
@@ -126,124 +126,119 @@ else:
 ####################################
 # Building input property profile.
 ####################################
-inputInfo = inputProperty(args.hidden,dataset,manual_mode,verbose_mode,
-                enable_rabbit,enable_sort_by_degree,rabbitRatio,
-                partSize,dimWorker,warpPerBlock,sharedMem,
-                A_blockDim,Gy_input,Gy_hidden,C_blocks_input,C_blocks_hidden)
+inputInfo = inputProperty(args.hidden, dataset, manual_mode, verbose_mode,
+                          enable_rabbit, enable_sort_by_degree, rabbitRatio,
+                          partSize, dimWorker, warpPerBlock, sharedMem,
+                          A_blockDim, Gy_input, Gy_hidden, C_blocks_input, C_blocks_hidden)
 
 ####################################
-# Decider for parameter selection.
+# Decider for parameter selection.(Reorder steps included)
 ####################################
 inputInfo.decider()
+dataset.edge_index_to_adj_list()
+dataset.split_by_density(
+    inputInfo.density, inputInfo.A_tileDim, inputInfo.B_tileDim)
 
 inputInfo = inputInfo.set_input()
 if verbose_mode:
     print('----------------------------')
-    inputInfo.print_param()
-    print()
+    inputInfo.print_param_general()
+    inputInfo.print_param_layerwise()
 
 inputInfo = inputInfo.set_hidden()
 if verbose_mode:
-    inputInfo.print_param()
-    print()
-    inputInfo.print_param_SpRT()
-    print()
-    print('----------------------------')
+    inputInfo.print_param_layerwise()
 
-num_nodes = dataset.num_nodes
-num_edges = dataset.num_edges
-column_index = dataset.column_index
-row_pointers = dataset.row_pointers
-degrees = dataset.degrees
-# if verbose_mode:
-#     print('degrees:')
-#     print(degrees)
-#     print('column_index:')
-#     print(column_index)
-#     print('row_pointers:')
-#     print(row_pointers)
-# sys.exit(0)
 
 ####################################
 # SparseRT
 ####################################
 
-BA_npy = dataset.save_transposed_sparse_matrix_npy(
-    inputInfo.modeBarrier) if inputInfo.modeBarrier > 0 else ''
+degrees_file, AB_file = dataset.save_for_sparsert()
 
-inputLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
+inputLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
                                inputInfo.outputDim_input, inputInfo.C_blocks_input, inputInfo.Gy_input, verbose_mode)
-hiddenLayerSpRT = SparseRTLayer(BA_npy, inputInfo,
+hiddenLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
                                 inputInfo.outputDim_hidden, inputInfo.C_blocks_hidden, inputInfo.Gy_hidden, verbose_mode)
 
-if inputInfo.modeBarrier > 0:
-    start = time.perf_counter()
-    inputLayerSpRT.gen_ptx_and_cubin()
-    inputLayerSpRT.get_func_handle()
-    hiddenLayerSpRT.gen_ptx_and_cubin()
-    hiddenLayerSpRT.get_func_handle()
-    elapsed = time.perf_counter() - start
-    if verbose_mode:
-        log.done(
-            "# SparseRT generate .ptx & .cubin, and get function handle (s): {:.3f}".format(elapsed))
+
+start = time.perf_counter()
+inputLayerSpRT.gen_ptx_and_cubin()
+inputLayerSpRT.get_func_handle()
+hiddenLayerSpRT.gen_ptx_and_cubin()
+hiddenLayerSpRT.get_func_handle()
+elapsed = time.perf_counter() - start
+if verbose_mode:
+    log.done(
+        "# SparseRT generate .ptx & .cubin, and get function handle (s): {:.3f}".format(elapsed))
 
 ####################################
 # Building neighbor partitioning.
 ####################################
+dataset.GNNA_gen_csr()
+if verbose_mode:
+    print('row_pointers:')
+    print(dataset.dense_row_pointers)
+    print('column_index:')
+    print(dataset.dense_column_index)
 
-
-if inputInfo.modeBarrier < num_nodes:
+if len(dataset.dense_column_index) > 0:
     start = time.perf_counter()
     partPtr, part2Node = GNNA.build_part(
-        inputInfo.partSize, dataset.row_pointers, inputInfo.modeBarrier)
+        inputInfo.partSize, torch.IntTensor(dataset.dense_row_pointers))
     elapsed = time.perf_counter() - start
-    if verbose_mode:
-        log.done("# Build nb_part (s): {:.3f}".format(elapsed))
+    log.done("# Build nb_part (s): {:.3f}".format(elapsed))
 else:
     partPtr = torch.zeros(0)
     part2Node = torch.zeros(0)
 
-dataset.row_pointers = dataset.row_pointers.to(device)
-dataset.column_index = dataset.column_index.to(device)
+if verbose_mode:
+    print('partPtr')
+    print(partPtr)
+    print('part2Node')
+    print(part2Node)
+
+dataset.dense_row_pointers = dataset.dense_row_pointers.to(device)
+dataset.dense_column_index = dataset.dense_column_index.to(device)
 inputInfo.partPtr = partPtr.int().to(device)
 inputInfo.part2Node = part2Node.int().to(device)
+dataset.degrees_gpu = dataset.degrees_cpu.to(device)
+
+# ####################################
+# # Verifing a single SpMM kernel
+# # against the CPU reference.
+# ####################################
+# if verify_spmm:
+#     from unitest import *
+#     valid = Verification(args.hidden,
+#                          dataset.dense_row_pointers, dataset.column_index, degrees,
+#                          inputInfo.partPtr, inputInfo.part2Node,
+#                          partSize, dimWorker, warpPerBlock,
+#                          inputLayerSpRT.cu_function, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size, inputLayerSpRT.ctx)
+#     valid.compute()
+#     valid.reference(dataset.edge_index, dataset.a_times_d(
+#         inputInfo.modeBarrier), dataset.num_nodes)
+#     valid.compare()
+#     sys.exit(0)
+
+
+# ####################################
+# # Profiling a single SpMM kernel
+# ####################################
+# if single_spmm:
+#     from unitest import *
+#     valid = Verification(args.hidden,
+#                          inputInfo.dense_row_pointers, dataset.column_index, degrees,
+#                          inputInfo.partPtr, inputInfo.part2Node,
+#                          partSize, dimWorker, warpPerBlock)
+#     valid.profile_spmm(round=args.num_epoches)
+#     sys.exit(0)
 
 ####################################
-# Verifing a single SpMM kernel
-# against the CPU reference.
+# Building GCN model
 ####################################
-if verify_spmm:
-    from unitest import *
-    valid = Verification(args.hidden,
-                         dataset.row_pointers, dataset.column_index, degrees,
-                         inputInfo.partPtr, inputInfo.part2Node,
-                         partSize, dimWorker, warpPerBlock,
-                         inputLayerSpRT.cu_function, inputLayerSpRT.A_blocks, inputLayerSpRT.C_blocks, inputLayerSpRT.Block_size, inputLayerSpRT.ctx)
-    valid.compute()
-    valid.reference(dataset.edge_index, dataset.a_times_d(
-        inputInfo.modeBarrier), dataset.num_nodes)
-    valid.compare()
-    sys.exit(0)
 
-
-####################################
-# Profiling a single SpMM kernel
-####################################
-if single_spmm:
-    from unitest import *
-    valid = Verification(args.hidden,
-                         inputInfo.row_pointers, dataset.column_index, degrees,
-                         inputInfo.partPtr, inputInfo.part2Node,
-                         partSize, dimWorker, warpPerBlock)
-    valid.profile_spmm(round=args.num_epoches)
-    sys.exit(0)
-
-####################################
-# Building GNN model
-####################################
-# if args.model == 'gcn':
-
-a_hat_hat_for_test = torch.FloatTensor(dataset.a_times_d())
+a_hat_hat_for_test = torch.FloatTensor(dataset.calc_d_a_d())
 
 
 class Net(torch.nn.Module):
@@ -294,5 +289,8 @@ if __name__ == '__main__':
     torch.cuda.synchronize()
     train_time = time.perf_counter() - start_train
 
-    print('Time (ms): {:.3f}'.format(train_time*1e3/args.num_epoches))
+    # print('Average train Time (ms): {:.3f}'.format(
+    #     train_time*1e3/args.num_epoches))
+    print('Train Time (ms): {:.3f}'.format(
+        train_time*1e3))
     print()

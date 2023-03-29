@@ -338,6 +338,7 @@ BLOCK_END = """
 #if Gy == 1
     for(int i = 0; i < Ny; i++)
 	{
+		//atomicAdd(&AC[(A_offset + i) * C_dim + C_offset + lane],ACC[i]);
         AC[(A_offset + i) * C_dim + C_offset + lane] = ACC[i];
     }
     
@@ -354,7 +355,8 @@ BLOCK_END = """
 		int row = i / Tsz;
 		int col = i % Tsz;
 		//AC[A_offset + row][C_offset + col] = result[row][col];
-		AC[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
+		//AC[(A_offset + row) * C_dim + C_offset + col] = result[row][col];
+		atomicAdd(&AC[(A_offset + row) * C_dim + C_offset + col],ACC[i]);
 	}
 #endif       
        

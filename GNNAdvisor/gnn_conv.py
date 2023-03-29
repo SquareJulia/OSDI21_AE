@@ -47,11 +47,11 @@ class GNNAFunction(torch.autograd.Function):
         # print("[Foward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        X_prime = GNNA.forward(X, weight, inputInfo.dataset_obj.row_pointers, inputInfo.dataset_obj.column_index,
-                               inputInfo.dataset_obj.degrees, inputInfo.partPtr, inputInfo.part2Node,
+        X_prime = GNNA.forward(X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
+                               inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
                                inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock,
                                SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
-                               SpRT_layer.Block_size, SpRT_layer.ctx.getPtr(), inputInfo.modeBarrier)[0]
+                               SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())[0]
 
         X_prime_ref = torch.mm(a_hat_hat_for_test, torch.mm(X, weight).cpu())
         if not compare_tensor(X_prime, X_prime_ref):
@@ -85,11 +85,11 @@ class GNNAFunction(torch.autograd.Function):
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.row_pointers, inputInfo.dataset_obj.column_index,
-                                          inputInfo.dataset_obj.degrees, inputInfo.partPtr, inputInfo.part2Node,
+        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
+                                          inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
                                           ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
                                           SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
-                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr(), inputInfo.modeBarrier)
+                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())
 
         d_X_prime_ref = torch.mm(a_hat_hat_for_test, d_output.cpu())
         d_input_ref = torch.mm(d_X_prime_ref, weight.permute(1, 0).cpu())

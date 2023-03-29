@@ -54,13 +54,13 @@ def first_ge(alist, threshold):
 def compare_tensor(result, result_ref):
     ''' Compare the result with result_ref.
         Return True if they are almost equal.
-    ''' 
+    '''
     if result_ref is None or result is None:
         raise ValueError(
             "MUST compute result and result reference (CPU) first!!")
 
     # equs = torch.eq(result_ref, result.cpu())
-    equs = torch.isclose(result_ref, result.cpu(), atol=0.1)
+    equs = torch.isclose(result_ref, result.cpu(), atol=1e-7)
     correct = torch.sum(equs)
     # print('compute error ratio: {.3f}'.format(1 - correct/result_ref.numel()))
     equal = False
@@ -74,12 +74,12 @@ def compare_tensor(result, result_ref):
     return equal
 
 
-def save_adj_list(adj_list,path):
+def save_adj_list(adj_list, path):
     ''' Save the adj_list(list[list[]]) in txt mode.
     '''
-    txt_adj_list=''
+    txt_adj_list = ''
     for row in adj_list:
-        txt_adj_list+=' '.join(str(f) for f in row)
-        txt_adj_list+='\n'
-    with open(path,'w') as f:
+        txt_adj_list += ' '.join(str(f) for f in row)
+        txt_adj_list += '\n'
+    with open(path, 'w') as f:
         f.write(txt_adj_list)

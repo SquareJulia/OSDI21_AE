@@ -4,9 +4,10 @@ import numpy as np
 from code_fragments import *
 from utils import *
 from ptx_utils import *
-import random
 import os
 import log
+from scipy.sparse import *
+
 
 import argparse
 parser = argparse.ArgumentParser(description='CodeGen V1')
@@ -17,7 +18,8 @@ parser.add_argument('--C_dim', type=int, default=12)
 parser.add_argument('--A_blocks', type=int, default=12)
 parser.add_argument('--C_blocks', type=int, default=12)
 parser.add_argument('--Gy', type=int, default=12)
-parser.add_argument('--infile', default=None, type=str)
+parser.add_argument('--degrees_file', default=None, type=str)
+parser.add_argument('--AB_file', default=None, type=str)
 parser.add_argument('--infile_bias', default=None, type=str)
 parser.add_argument('--outfile', default=None, type=str)
 parser.add_argument('--half', default=False, action='store_true')
@@ -37,14 +39,15 @@ B_dim = args.B_dim
 C_dim = args.C_dim
 A_blocks = args.A_blocks
 C_blocks = args.C_blocks
-input_file = args.infile
+degrees_file = args.degrees_file
+AB_file = args.AB_file
 input_file_bias = args.infile_bias
 outfile = args.outfile
-BA = np.load(input_file)
+degrees = np.load(degrees_file)
+AB = load_npz(AB_file)
+AB = AB.tocsr()
 if input_file_bias:
     bias = np.load(input_file_bias)
-# print(BA.shape)
-BA = BA.squeeze()
 
 if FUSE_END and GY > 1:
     print("More than one group not supported with epilogue strategy")
@@ -131,7 +134,7 @@ def generate_cuda_stem(block, NY, GY=None):
     return program
 
 
-def generate_from_B(Ny_indices, B_indices, BA, block, NY, ADDR, reg_names,  GY=None, A_offset=None):
+def generate_from_B(Ny_indices, B_indices, degrees, block, NY, ADDR, reg_names,  GY=None, A_offset=None):
 
     ptxs = []
 
@@ -164,7 +167,10 @@ def generate_from_B(Ny_indices, B_indices, BA, block, NY, ADDR, reg_names,  GY=N
 
             a_idx = ny_to_a(ny_idx, group, block,
                             A_dim=A_dim, A_offset=A_offset)
-            value = BA[b_idx, a_idx]
+            # value = AB[a_idx,b_idx]
+            value = 1  # all values are 1's
+            value *= degrees[a_idx]
+            value *= degrees[b_idx]
 
             if HALF:
                 compute_block_ptx = emit_compute_block_ptx_half(
@@ -179,28 +185,18 @@ def generate_from_B(Ny_indices, B_indices, BA, block, NY, ADDR, reg_names,  GY=N
     return ptxs
 
 
-def get_idx_balanced(block, BA, A_offset, block_NY, GY=None):
+def get_idx_balanced(block, AB, A_offset, block_NY, GY=None):
 
-    Ny_indices = [[] for i in range(GY)]
-    B_indices = [[] for i in range(GY)]
-    nnz = np.sum(np.abs(BA[:, A_offset:A_offset + block_NY]) > EPS)
-    nnz_per_group = nnz // GY
-    curr_group = 0
-    curr_nnz = 0
-    for B_idx in range(B_dim):
-        for ny in range(block_NY):
-            assert curr_group < GY
-            A_idx = ny_to_a(ny, curr_group, block,
-                            A_dim=A_dim, A_offset=A_offset)
-            if np.abs(BA[B_idx, A_idx]) > EPS:
-                B_indices[curr_group].append(B_idx)
-                Ny_indices[curr_group].append(ny)
-                curr_nnz += 1
-            if curr_nnz > nnz_per_group:
-                curr_group += 1
-                curr_nnz = 0
+    block_AB = AB[A_offset:A_offset+block_NY].tocsc()
+    Ny_indices_all, B_indices_all = indices_of_csc(block_AB)
+
+    # Distribute workload to groups
+    Ny_indices = np.array_split(Ny_indices_all, GY)
+    B_indices = np.array_split(B_indices_all, GY)
 
     return Ny_indices, B_indices
+
+# Deprecated.
 
 
 def load_balancer2(BA):
@@ -216,23 +212,21 @@ def load_balancer2(BA):
     return bounds, NY
 
 
-def no_load_balance(BA):
+def no_load_balance(AB):
 
     assert A_dim % A_blocks == 0
     interval = A_dim // A_blocks
     bounds = [interval * i for i in range(A_blocks + 1)]
     return bounds, interval
 
-# name is the name of the numpy file
 
-
-def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
+def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     program = ""
     assert A_dim % A_blocks == 0
     assert C_dim % C_blocks == 0
-    B_dim = BA.shape[0]
+    B_dim = AB.shape[1]
   #  bounds, NY = load_balancer2(BA)
-    bounds, NY = no_load_balance(BA)
+    bounds, NY = no_load_balance(AB)
     if RESIDUAL:
         program += START_NONFUSED_RESIDUAL.replace("ST_VAL", str(ST)).replace("Ny", str(NY)).replace("GY", str(GY)).replace("A_dim", str(A_dim)).replace(
             "C_dim", str(C_dim)).replace("B_dim", str(B_dim)).replace("A_BLOCKS", str(A_blocks)).replace("C_BLOCKS", str(C_blocks)) + "\n"
@@ -273,9 +267,8 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
 
     program += END_NONFUSED.replace("A_BLOCKS", str(A_blocks)).replace("C_BLOCKS", str(C_blocks)).replace("A_dim", str(A_dim)). \
         replace("C_dim", str(C_dim)).replace(
-            "B_dim", str(B_dim)).replace("AB_sparse_tidy.npy", name)
-
-    token = str(random.random())[2:5]
+            "B_dim", str(B_dim)).replace("AB_sparse_tidy.npy", AB_file)  # buggy
+    token = str(np.random.random())[2:5]
     temp_cu_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".cu"
     temp_ptx_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".ptx"
 
@@ -286,10 +279,6 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
         " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
     log.info('Compiling .cu to .ptx:')
     print(compile_command)
-    # print('LD_LIBRARY_PATH:')
-    # print(os.getenv('LD_LIBRARY_PATH'))
-    # print('PATH:')
-    # print(os.getenv('PATH'))
     os.system(compile_command)
     # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
     #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
@@ -302,10 +291,10 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
         A_offset = bounds[block]
         block_NY = bounds[block+1] - A_offset
         Ny_indices, B_indices = get_idx_balanced(
-            block, BA, A_offset, block_NY, GY=GY)
+            block, AB, A_offset, block_NY, GY=GY)
 
         block_ptxs = generate_from_B(
-            Ny_indices, B_indices, BA, block, NY, addresses[block], reg_names,  GY=GY, A_offset=A_offset)
+            Ny_indices, B_indices, degrees, block, NY, addresses[block], reg_names,  GY=GY, A_offset=A_offset)
         ptxs.append(block_ptxs)
 
     if RESIDUAL or NO_RELU:
@@ -316,4 +305,4 @@ def gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=None):
 #GX = 191
 
 
-gencode(BA, outfile, C_dim, A_blocks, C_blocks, GY, name=input_file)
+gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file)

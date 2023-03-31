@@ -3,6 +3,7 @@ import os.path as osp
 from utils import *
 from cuda import cuda
 import log
+import time
 
 
 class SparseRTLayer():
@@ -46,10 +47,13 @@ class SparseRTLayer():
         if self.verbose:
             log.info('+ generating cubin with C_dim:{}...'.format(self.C_dim))
             print(gen_cubin_command)
+        start = time.perf_counter()
         os.system(gen_cubin_command)
         if not osp.exists(self.cubin_file):
             log.fail('Failed to generate cubin!')
             exit(0)
+        log.info('# Generate .cubin(s): {:.3f}'.format(
+            time.perf_counter()-start))
 
     def prepare_dist_path(self, dist_path):
         '''Create dist path if not exists, and remove old products if any.

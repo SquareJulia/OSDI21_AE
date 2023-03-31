@@ -10,8 +10,8 @@ enable_rabbit = True
 manual_mode = False
 # whether to printout more information such as the layerwise parameter.
 verbose_mode = True
-loadFromTxt = False       # whether to load data from a plain txt file.
-# loadFromTxt = True
+# loadFromTxt = False       # whether to load data from a plain txt file.
+loadFromTxt = True
 
 if run_GCN:
     model = 'gcn'
@@ -27,8 +27,8 @@ partsize_li = [32]          # only effective in manual model
 
 dataset = [
     # ('g1.txt', 1000, 5),
-    # ('g5nodes.txt', 1000, 2)
-    ('citeseer', 3703, 6),
+    ('g5nodes.txt', 1000, 2)
+    # ('citeseer', 3703, 6),
     # ('cora', 1433, 7),
     # ('pubmed'	        , 500	    , 3   ),
     # ('ppi'	            , 50	    , 121 ),
@@ -46,8 +46,8 @@ dataset = [
     # ( 'soc-BlogCatalog'	       	 , 128  , 39),
     # ( 'amazon0601'  	         , 96	, 22),
 ]
-# dataDir = '../my-test-graphs'
-dataDir = '../osdi-ae-graphs'
+dataDir = '../my-test-graphs'
+# dataDir = '../osdi-ae-graphs'
 
 for partsize in partsize_li:
     for hid in hidden:

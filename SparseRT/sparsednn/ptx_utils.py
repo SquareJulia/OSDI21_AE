@@ -5,39 +5,26 @@ from utils import half_to_hex
 
 def parse_ptx(filename, A_blocks):
     ptx = open(filename, "r").readlines()
-    # deal with B_G_
-    reg_names = []
-    global_address_names = []
-    #saved_global_address_name = None
-    for block in range(A_blocks):
-        block_reg_names = []
-        look_for = "B" + str(block) + "G0"
-        for line_num in range(len(ptx)):
-            if look_for in ptx[line_num]:
-                for j in range(3, 10000):
-                    if "fma.rn.f32" in ptx[line_num+j]:
-                        register_name = ptx[line_num +
-                                            j].split()[1].replace(",", "")
-                        block_reg_names.append(
-                            int(register_name.replace("%f", "")))
-                    if "END" in ptx[line_num+j]:
-                        break
-                global_address_name = None
-                for j in range(2, 10000):
-                    if "ld.f32" in ptx[line_num + j]:
-                        if "+" in ptx[line_num + j]:
-                            global_address_name = ptx[line_num +
-                                                      j].split("[")[1].split("+")[0]
-                        else:
-                            global_address_name = ptx[line_num +
-                                                      j].split("[")[1].split("]")[0]
-                        break
-                if global_address_name is None:
-                    print("Can't detect global address register name.")
-                    raise Exception
-                global_address_names.append(global_address_name)
-                reg_names.append(block_reg_names)
-
+    reg_names = [[]for i in range(A_blocks)]
+    global_address_names = [0]*A_blocks
+    line = 0
+    while line < len(ptx):
+        if 'START' in ptx[line]:
+            block = int(ptx[line].split('B')[1].split('G')[0])
+            block_reg_list = reg_names[block]
+            line += 1
+            while 'ld.f32' not in ptx[line]:
+                line += 1
+            global_address_names[block] = ptx[line].split("[")[1].split("]")[0]
+            line += 1
+            while 'END' not in ptx[line]:
+                if 'fma.rn.f32' in ptx[line]:
+                    reg_name = ptx[line].split()[1][2:-1]
+                    block_reg_list.append(int(reg_name))
+                line += 1
+        line += 1
+    # print('reg_names')
+    # print(reg_names)
     return reg_names, global_address_names
 
 

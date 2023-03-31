@@ -109,15 +109,15 @@ class inputProperty(object):
 
     def decider_split(self):
         self.density = self.dataset_obj.avg_density
-        # self.A_tileDim = 80  # TODO
-        # self.B_tileDim = 80
-        self.A_tileDim = 2
-        self.B_tileDim = 2
+        self.A_tileDim = 80  # TODO
+        self.B_tileDim = 80
+        # self.A_tileDim = 2
+        # self.B_tileDim = 2
 
     def decider_SparseRT(self):
         '''Determine SparseRT related parameters.'''
-        # self.A_blockDim = 8  # TODO
-        self.A_blockDim = 4
+        self.A_blockDim = 8  # TODO
+        # self.A_blockDim = 4
         self.C_blocks_input = self.decider_C_Blocks(self.outputDim_input)
         self.C_blocks_hidden = self.decider_C_Blocks(self.outputDim_hidden)
         self.Gy_input = self.decider_Gy(

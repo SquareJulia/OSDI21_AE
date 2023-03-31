@@ -1,0 +1,95 @@
+Namespace(dataDir='../osdi-ae-graphs', dataset='citeseer', dim=3703, hidden=16, classes=6, model='gcn', num_epoches=200, density=0.001, A_tileDim=80, B_tileDim=80, A_blockDim=8, Gy_input=1, Gy_hidden=1, C_blocks_input=1, C_blocks_hidden=1, partSize=32, dimWorker=32, warpPerBlock=8, sharedMem=100, manual_mode='False', verbose_mode='True', loadFromTxt='False', single_spmm='False', verify_spmm='False', enable_sort_by_degree='False', enable_rabbit='True', rabbitRatio=0.5)
+# Loading (npz)(s): 0.002
+# nodes: 3327
+# avg_degree: 2.77
+# avg_edgeSpan: 1086
+# edges: 12555
+num_nodes: 3327
+Degree reorder flag is set. Continue...
+# Reorder by degree time (s): 0.013
+Rabbit-reorder flag is set. Continue...
+Number of threads: 12
+Number of vertices: 1663
+Number of edges: 6008
+Generating a permutation...
+Runtime for permutation generation [sec]: 0.000798702
+# Reorder time (s): 0.017
+num_nodes: 3327
+input-layer shared memory (KB): 3.776 
+input-layer updated (KB): 0.400
+hidden-layer shared memory (KB): 3.456 
+hidden-layer updated (KB): 0.400
+
+=> AUTO Decider Complete !!!
+
+=> Splitted the adjacency list!
+----------------------------
+Reorder and split params:
+reorder_by_degree_flag: True
+reorder_rabbit_flag: True
+rabbitBarrier: 1663
+density: 0.001
+A_tileDim: 80
+B_tileDim: 80
+----------------------------
+SparseRT params:
+A_blockDim: 8
+A_dim: 3280
+----------------------------
+INPUT partSize: 2
+INPUT warpPerBlock: 5
+INPUT dimWorker: 16
+----------------------------
+INPUT Gy: 1
+INPUT C_blocks: 1
+----------------------------
+HIDDEN partSize: 2
+HIDDEN warpPerBlock: 8
+HIDDEN dimWorker: 6
+----------------------------
+HIDDEN Gy: 1
+HIDDEN C_blocks: 1
+----------------------------
+# Saving D^ and AB for sparseRT
+SparseRT nnz count:3004
++ generating ptx with C_dim:16...
+python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim 3280 --B_dim 3327     --C_dim 16 --A_blocks 410 --C_blocks 1 --Gy 1         --degrees_file ../SparseRT/materials/data/osdi-ae-graphs/citeseer_degrees.npy --AB_file ../SparseRT/materials/data/osdi-ae-graphs/citeseer_AB.npz --outfile ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_16.ptx
+WARNING! PTX MODE CURRENTLY ASSUMES FX = 1
+Compiling .cu to .ptx:
+nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o ../SparseRT/materials/temp/temp_stub072.ptx ../SparseRT/materials/temp/temp_stub072.cu --std=c++11 --compiler-options="-fsingle-precision-constant" -lcnpy -lz
+# Compile time(s): 194.781
+# Parse ptx time(s): 0.054
+# Modify ptx time(s): 0.444
++ generating cubin with C_dim:16...
+ptxas -arch=sm_70 ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_16.ptx -o ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_16.cubin
+# Generate .cubin(s): 276.315
++ generating ptx with C_dim:6...
+python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim 3280 --B_dim 3327     --C_dim 6 --A_blocks 410 --C_blocks 1 --Gy 1         --degrees_file ../SparseRT/materials/data/osdi-ae-graphs/citeseer_degrees.npy --AB_file ../SparseRT/materials/data/osdi-ae-graphs/citeseer_AB.npz --outfile ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_6.ptx
+WARNING! PTX MODE CURRENTLY ASSUMES FX = 1
+Compiling .cu to .ptx:
+nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o ../SparseRT/materials/temp/temp_stub579.ptx ../SparseRT/materials/temp/temp_stub579.cu --std=c++11 --compiler-options="-fsingle-precision-constant" -lcnpy -lz
+# Compile time(s): 193.898
+# Parse ptx time(s): 0.055
+# Modify ptx time(s): 0.453
++ generating cubin with C_dim:6...
+ptxas -arch=sm_70 ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_6.ptx -o ../SparseRT/materials/dist/osdi-ae-graphs/citeseer_AB_6.cubin
+# Generate .cubin(s): 277.220
+# SparseRT generate .ptx & .cubin, and get function handle (s): 943.703
+row_pointers:
+tensor([   0,    1,    3,  ..., 9547, 9549, 9551], dtype=torch.int32)
+column_index:
+tensor([   0,    1,    1,  ..., 3325,  356, 3326], dtype=torch.int32)
+# Build nb_part (s): 0.011
+partPtr
+tensor([0.00e+00, 1.00e+00, 3.00e+00,  ..., 9.55e+03, 9.55e+03, 9.55e+03])
+part2Node
+tensor([0.00e+00, 1.00e+00, 2.00e+00,  ..., 3.32e+03, 3.32e+03, 3.33e+03])
+Net(
+  (conv1): GCNConv()
+  (conv2): GCNConv()
+)
+GCN forward kernel Time (ms)(SparseRT+GNNA): 0.178 + 0.045 = 0.223
+GCN forward kernel Time (ms)(SparseRT+GNNA): 0.142 + 0.033 = 0.175
+GCN backward kernel Time (ms)(SparseRT+GNNA): 0.117 + 0.031 = 0.147
+GCN backward kernel Time (ms)(SparseRT+GNNA): 0.077 + 0.028 = 0.104
+Train Time (ms): 879.416

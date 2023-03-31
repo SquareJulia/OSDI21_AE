@@ -7,6 +7,7 @@ from ptx_utils import *
 import os
 import log
 from scipy.sparse import *
+import time
 
 
 import argparse
@@ -279,13 +280,18 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
     log.info('Compiling .cu to .ptx:')
     print(compile_command)
+    start = time.perf_counter()
     os.system(compile_command)
     # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
     #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
     os.sync()
+    log.info('# Compile time(s): {:.3f}'.format(time.perf_counter()-start))
+    start = time.perf_counter()
     reg_names, addresses = parse_ptx(temp_ptx_file_name, A_blocks)
+    log.info('# Parse ptx time(s): {:.3f}'.format(time.perf_counter()-start))
     # print(reg_names)
     ptxs = []
+    start = time.perf_counter()
     for block in range(A_blocks):
         # for block in range(1):
         A_offset = bounds[block]
@@ -301,6 +307,7 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
     else:
         insert_ptx(temp_ptx_file_name, outfile, ptxs)
+    log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
 
 #GX = 191
 

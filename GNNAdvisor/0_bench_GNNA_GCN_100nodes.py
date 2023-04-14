@@ -27,7 +27,7 @@ partsize_li = [32]          # only effective in manual model
 
 dataset = [
     # ('g1.txt', 1000, 5),
-    ('g5nodes.txt', 1000, 2)
+    ('g100nodes.txt', 1000, 2)
     # ('citeseer', 3703, 6),
     # ('cora', 1433, 7),
     # ('pubmed'	        , 500	    , 3   ),

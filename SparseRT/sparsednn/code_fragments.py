@@ -262,6 +262,9 @@ ACC[I] += RC * 0.0I1f;"""
 GEN_END = """
 asm("//END;");
 """
+GEN_STORE_END = """
+	asm("//STORE_END;");
+"""
 
 
 GEN_LANDMARK_PTX = """
@@ -280,7 +283,6 @@ GROUP_CONTROL_END = """
 BLOCK_CONTROL_START = """
 if(blockIdx.x == BLOCK)
 {
-
 """
 
 BLOCK_CONTROL_END = """
@@ -333,8 +335,12 @@ BLOCK_END_REDUCTION_RESIDUAL_2 = """
         AC[OFFSET + C_offset  + lane] = max(residual[OFFSET + C_offset  + lane] + ACC[IDX] + BIASf,0.0f);
 """
 
-BLOCK_END = """
-   
+BLOCK_END_BLANK = """
+	asm("//STORE");
+"""
+
+BLOCK_END = """  
+	asm("//STORE"); 
 #if Gy == 1
     for(int i = 0; i < Ny; i++)
 	{
@@ -359,7 +365,6 @@ BLOCK_END = """
 		atomicAdd(&AC[(A_offset + row) * C_dim + C_offset + col],ACC[i]);
 	}
 #endif       
-       
 """
 
 BLOCK_END_RESIDUAL = """

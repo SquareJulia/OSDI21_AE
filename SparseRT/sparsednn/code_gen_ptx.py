@@ -66,6 +66,9 @@ ld.global.nc.f32    load_reg, [ADDR + OFFSET];"""
 LOAD_CACHE_PTX_HALF = """
 ld.global.nc.f16x2    load_reg, [ADDR + OFFSET];"""
 
+STORE_PTX = """
+st.f32 	[ADDR + OFFSET], FLOAT_REG;"""
+
 MAIN_PROGRAM_PTX = """
 fma.rn.f32  DEST, load_reg, MULT, ACC;"""
 
@@ -83,6 +86,10 @@ def emit_load_block_ptx(B_idx, block, ADDR):
     new_block = block.replace("ADDR", str(ADDR)).replace(
         "OFFSET", str(B_idx * C_dim * 4))
     return new_block
+
+
+def emit_store_block_ptx(A_idx, block, ADDR, FLOAT_REG):
+    return block.replace('ADDR', str(ADDR)).replace('OFFSET', str(A_idx*C_dim*4)).replace('FLOAT_REG', '%f'+str(FLOAT_REG))
 
 
 def emit_compute_block_ptx(Ny_idx, block_reg_names, val, block, virgin):
@@ -123,11 +130,13 @@ def generate_cuda_stem(block, NY, GY=None):
 
         program += textwrap.indent(GEN_LANDMARK_PTX.replace("I",
                                    str(block)).replace("J", str(group)), "\t")
-        program += textwrap.indent(GEN_LOAD, "\t")
 
-        for i in range(NY):
-            program += textwrap.indent(GEN_ACC.replace("B", str(block)
-                                                       ).replace("G", str(group)).replace("I", str(i)), "\t")
+        if block == 0 or block == 1:  # TODO fix
+            program += textwrap.indent(GEN_LOAD, "\t")
+
+            for i in range(NY):
+                program += textwrap.indent(GEN_ACC.replace("B", str(block)
+                                                           ).replace("G", str(group)).replace("I", str(i)), "\t")
 
         program += textwrap.indent(GEN_END, "\t")
         program += GROUP_CONTROL_END + "\n"
@@ -135,7 +144,7 @@ def generate_cuda_stem(block, NY, GY=None):
     return program
 
 
-def generate_from_B(Ny_indices, B_indices, degrees, block, NY, ADDR, reg_names,  GY=None, A_offset=None):
+def generate_from_B(Ny_indices, B_indices, degrees, block, NY, load_base_reg, store_base_reg, reg_names,  GY=None, A_offset=None):
 
     ptxs = []
 
@@ -149,7 +158,6 @@ def generate_from_B(Ny_indices, B_indices, degrees, block, NY, ADDR, reg_names, 
         # else:
         ptx = "\n\t"
 
-        block_reg_names = reg_names[block]
         virgin = np.zeros(NY)
 
         old_b_idx = -1
@@ -159,10 +167,10 @@ def generate_from_B(Ny_indices, B_indices, degrees, block, NY, ADDR, reg_names, 
             if b_idx != old_b_idx:
                 if HALF:
                     load_block_ptx = emit_load_block_ptx(
-                        b_idx, LOAD_CACHE_PTX_HALF, ADDR)
+                        b_idx, LOAD_CACHE_PTX_HALF, load_base_reg)
                 else:
                     load_block_ptx = emit_load_block_ptx(
-                        b_idx, LOAD_CACHE_PTX, ADDR)
+                        b_idx, LOAD_CACHE_PTX, load_base_reg)
                 ptx += load_block_ptx
                 old_b_idx = b_idx
 
@@ -175,15 +183,24 @@ def generate_from_B(Ny_indices, B_indices, degrees, block, NY, ADDR, reg_names, 
 
             if HALF:
                 compute_block_ptx = emit_compute_block_ptx_half(
-                    ny_idx, block_reg_names, value,  virgin)
+                    ny_idx, reg_names, value,  virgin)
             else:
                 compute_block_ptx = emit_compute_block_ptx(
-                    ny_idx, block_reg_names, value, MAIN_PROGRAM_PTX, virgin)
+                    ny_idx, reg_names, value, MAIN_PROGRAM_PTX, virgin)
             ptx += compute_block_ptx
 
         ptxs.append(textwrap.indent(ptx, "\t"))
 
-    return ptxs
+    # generate store code fragments
+    store_ptx = ''
+    a_idx = A_offset
+    for ny in range(NY):
+        store_ptx += emit_store_block_ptx(a_idx,
+                                          STORE_PTX, store_base_reg, reg_names[ny])
+        a_idx += 1
+    store_ptx = textwrap.indent(store_ptx, '\t')
+
+    return ptxs, store_ptx
 
 
 def get_idx_balanced(block, AB, A_offset, block_NY, GY=None):
@@ -262,8 +279,12 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
                 program += BLOCK_END_RESIDUAL.replace("A_offset", str(A_offset)).replace("Ny", str(block_NY)).replace("A_BLOCKS", str(A_blocks)).replace(
                     "C_BLOCKS", str(C_blocks)).replace("A_dim", str(A_dim)).replace("C_dim", str(C_dim)).replace("B_dim", str(B_dim)) + "\n"
             else:
-                program += BLOCK_END.replace("A_offset", str(A_offset)).replace("Ny", str(block_NY)).replace("A_BLOCKS", str(A_blocks)).replace(
-                    "C_BLOCKS", str(C_blocks)).replace("A_dim", str(A_dim)).replace("C_dim", str(C_dim)).replace("B_dim", str(B_dim)) + "\n"
+                if block == 0 or block == 1:
+                    program += BLOCK_END.replace("A_offset", str(A_offset)).replace("Ny", str(block_NY)).replace("A_BLOCKS", str(A_blocks)).replace(
+                        "C_BLOCKS", str(C_blocks)).replace("A_dim", str(A_dim)).replace("C_dim", str(C_dim)).replace("B_dim", str(B_dim)) + "\n"
+                else:
+                    program += BLOCK_END_BLANK
+            program += GEN_STORE_END
         program += BLOCK_CONTROL_END
 
     program += END_NONFUSED.replace("A_BLOCKS", str(A_blocks)).replace("C_BLOCKS", str(C_blocks)).replace("A_dim", str(A_dim)). \
@@ -287,26 +308,33 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     os.sync()
     log.info('# Compile time(s): {:.3f}'.format(time.perf_counter()-start))
     start = time.perf_counter()
-    reg_names, addresses = parse_ptx(temp_ptx_file_name, A_blocks)
+    reg_names, load_base_reg, store_base_reg = parse_ptx(
+        temp_ptx_file_name, A_blocks)
     log.info('# Parse ptx time(s): {:.3f}'.format(time.perf_counter()-start))
-    # print(reg_names)
     ptxs = []
+    store_ptxs = []
+
+    print('load_base_reg:{}'.format(load_base_reg))
+    print('store_base_reg:{}'.format(store_base_reg))
     start = time.perf_counter()
     for block in range(A_blocks):
-        # for block in range(1):
         A_offset = bounds[block]
         block_NY = bounds[block+1] - A_offset
         Ny_indices, B_indices = get_idx_balanced(
             block, AB, A_offset, block_NY, GY=GY)
 
-        block_ptxs = generate_from_B(
-            Ny_indices, B_indices, degrees, block, NY, addresses[block], reg_names,  GY=GY, A_offset=A_offset)
+        block_ptxs, store_ptx = generate_from_B(
+            Ny_indices, B_indices, degrees, block, NY, load_base_reg, store_base_reg, reg_names,  GY=GY, A_offset=A_offset)
         ptxs.append(block_ptxs)
+        store_ptxs.append(store_ptx)
+
+    print('store_ptxs:')
+    print(store_ptxs)
 
     if RESIDUAL or NO_RELU:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
     else:
-        insert_ptx(temp_ptx_file_name, outfile, ptxs)
+        insert_ptx(temp_ptx_file_name, outfile, ptxs, store_ptxs)
     log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
 
 #GX = 191

@@ -160,7 +160,7 @@ class inputProperty(object):
             self.dataset_obj.reorder_by_degree_flag = self.reorder_by_degree_flag = True  # TODO
             self.dataset_obj.reorder_rabbit_flag = self.reorder_rabbit_flag = math.sqrt(
                 self.avgEdgeSpan) > math.sqrt(self.num_nodes)/100
-
+            # self.dataset_obj.reorder_rabbit_flag = self.reorder_rabbit_flag = False  # TODO
         self.dataset_obj.degree_reorder()
         self.dataset_obj.rabbit_reorder(self.rabbitBarrier)
         self.dataset_obj.gen_degrees_hat()

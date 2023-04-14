@@ -195,8 +195,9 @@ def generate_from_B(Ny_indices, B_indices, degrees, block, NY, load_base_reg, st
     store_ptx = ''
     a_idx = A_offset
     for ny in range(NY):
-        store_ptx += emit_store_block_ptx(a_idx,
-                                          STORE_PTX, store_base_reg, reg_names[ny])
+        if virgin[ny] == 1:
+            store_ptx += emit_store_block_ptx(a_idx,
+                                              STORE_PTX, store_base_reg, reg_names[ny])
         a_idx += 1
     store_ptx = textwrap.indent(store_ptx, '\t')
 
@@ -314,8 +315,8 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     ptxs = []
     store_ptxs = []
 
-    print('load_base_reg:{}'.format(load_base_reg))
-    print('store_base_reg:{}'.format(store_base_reg))
+    # print('load_base_reg:{}'.format(load_base_reg))
+    # print('store_base_reg:{}'.format(store_base_reg))
     start = time.perf_counter()
     for block in range(A_blocks):
         A_offset = bounds[block]
@@ -328,8 +329,8 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         ptxs.append(block_ptxs)
         store_ptxs.append(store_ptx)
 
-    print('store_ptxs:')
-    print(store_ptxs)
+    # print('store_ptxs:')
+    # print(store_ptxs)
 
     if RESIDUAL or NO_RELU:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)

@@ -72,12 +72,12 @@ def insert_ptx(in_ptx_file, out_ptx_file, block_ptxs, store_ptxs, relu=True, blu
             my_group = int(line.split("G")[1].split(";")[0])
             my_ptx = block_ptxs[my_block][my_group]
             my_store_ptx = store_ptxs[my_block]
-            if my_block == 0 or my_block == 1:
-                print('block:{}'.format(my_block))
-                print('my_ptx:')
-                print(my_ptx)
-                print('my_store_ptx:')
-                print(my_store_ptx)
+            # if my_block == 0 or my_block == 1:
+            #     print('block:{}'.format(my_block))
+            #     print('my_ptx:')
+            #     print(my_ptx)
+            #     print('my_store_ptx:')
+            #     print(my_store_ptx)
 
             # we have to deal with cases where the load instruction doesn't
             # immediately follow the inline assembly marker

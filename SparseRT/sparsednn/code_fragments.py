@@ -268,8 +268,7 @@ GEN_STORE_END = """
 
 
 GEN_LANDMARK_PTX = """
-asm("//BIGJ;START");
-"""
+asm("//BIGJ;START");"""
 
 GROUP_CONTROL_START = """
 if(groupId == GROUP)
@@ -336,8 +335,7 @@ BLOCK_END_REDUCTION_RESIDUAL_2 = """
 """
 
 BLOCK_END_BLANK = """
-	asm("//STORE");
-"""
+	asm("//STORE");"""
 
 BLOCK_END = """  
 	asm("//STORE"); 

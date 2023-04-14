@@ -176,11 +176,11 @@ if verbose_mode:
 # Building neighbor partitioning.
 ####################################
 dataset.GNNA_gen_csr()
-if verbose_mode:
-    print('row_pointers:')
-    print(dataset.dense_row_pointers)
-    print('column_index:')
-    print(dataset.dense_column_index)
+# if verbose_mode:
+#     print('row_pointers:')
+#     print(dataset.dense_row_pointers)
+#     print('column_index:')
+#     print(dataset.dense_column_index)
 
 if len(dataset.dense_column_index) > 0:
     start = time.perf_counter()
@@ -192,11 +192,11 @@ else:
     partPtr = torch.zeros(0)
     part2Node = torch.zeros(0)
 
-if verbose_mode:
-    print('partPtr')
-    print(partPtr)
-    print('part2Node')
-    print(part2Node)
+# if verbose_mode:
+#     print('partPtr')
+#     print(partPtr)
+#     print('part2Node')
+#     print(part2Node)
 
 dataset.dense_row_pointers = dataset.dense_row_pointers.to(device)
 dataset.dense_column_index = dataset.dense_column_index.to(device)

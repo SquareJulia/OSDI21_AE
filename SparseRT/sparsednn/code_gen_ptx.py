@@ -54,7 +54,7 @@ if FUSE_END and GY > 1:
     print("More than one group not supported with epilogue strategy")
     exit()
 
-print("WARNING! PTX MODE CURRENTLY ASSUMES FX = 1")
+# print("WARNING! PTX MODE CURRENTLY ASSUMES FX = 1")
 
 LOAD_CACHE = """
 RC[ITER][i] = BC[IDX + C_offset + lane];
@@ -300,18 +300,18 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     compile_command = "nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +\
         " " + temp_cu_file_name + \
         " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz"
-    log.info('Compiling .cu to .ptx:')
-    print(compile_command)
+    # log.info('Compiling .cu to .ptx:')
+    # print(compile_command)
     start = time.perf_counter()
     os.system(compile_command)
     # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
     #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
     os.sync()
-    log.info('# Compile time(s): {:.3f}'.format(time.perf_counter()-start))
+    # log.info('# Compile time(s): {:.3f}'.format(time.perf_counter()-start))
     start = time.perf_counter()
     reg_names, load_base_reg, store_base_reg = parse_ptx(
         temp_ptx_file_name, A_blocks)
-    log.info('# Parse ptx time(s): {:.3f}'.format(time.perf_counter()-start))
+    # log.info('# Parse ptx time(s): {:.3f}'.format(time.perf_counter()-start))
     ptxs = []
     store_ptxs = []
 
@@ -336,7 +336,7 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
     else:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, store_ptxs)
-    log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
+    # log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
 
 #GX = 191
 

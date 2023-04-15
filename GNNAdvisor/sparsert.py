@@ -52,8 +52,9 @@ class SparseRTLayer():
         if not osp.exists(self.cubin_file):
             log.fail('Failed to generate cubin!')
             exit(0)
-        log.info('# Generate .cubin(s): {:.3f}'.format(
-            time.perf_counter()-start))
+        if self.verbose:
+            log.info('# Generate .cubin(s): {:.3f}'.format(
+                time.perf_counter()-start))
 
     def prepare_dist_path(self, dist_path):
         '''Create dist path if not exists, and remove old products if any.
@@ -63,11 +64,16 @@ class SparseRTLayer():
         else:
             remove_files_if_exists(self.ptx_file, self.cubin_file)
 
-    def gen_ptx_and_cubin(self):
+    def gen_ptx_and_cubin(self, inputInfo):
         dist_without_suffix = self.AB_file.replace(
             'data', 'dist').split('.npz')[0]
-        self.ptx_file = '{}_{}.ptx'.format(dist_without_suffix, self.C_dim)
-        self.cubin_file = '{}_{}.cubin'.format(dist_without_suffix, self.C_dim)
+        d_temp = 'd' if inputInfo.reorder_by_degree_flag else 'x'
+        r_temp = 'r{}'.format(
+            inputInfo.rabbitBarrier) if inputInfo.reorder_rabbit_flag else 'x'
+        template = '{}_{}_{}{}_{}_{}'.format(
+            dist_without_suffix, self.C_dim, d_temp, r_temp, inputInfo.density, inputInfo.A_tileDim)
+        self.ptx_file = '{}.ptx'.format(template)
+        self.cubin_file = '{}.cubin'.format(template)
         self.prepare_dist_path(osp.dirname(self.ptx_file))
         self.gen_ptx()
         self.gen_cubin()

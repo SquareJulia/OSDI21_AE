@@ -99,7 +99,7 @@ def reorder_by_degree(edge_index, degrees, desc=True):
 def degrees_from_edge_index(edge_index, num_nodes):
     ''' Generate degrees array from edge index. Assume the graph is undirected.
     '''
-    print('num_nodes:', num_nodes)  # 3327
+    # print('num_nodes:', num_nodes)  # 3327
     # degrees = [0]*num_nodes
     degrees = np.zeros(num_nodes, dtype=np.float32)
     # print('len(degrees):', len(degrees))  # 1

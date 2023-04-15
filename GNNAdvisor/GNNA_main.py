@@ -61,9 +61,9 @@ parser.add_argument("--C_blocks_hidden", type=int, default=1,
 # GNNAdvisor related
 parser.add_argument("--partSize", type=int, default=32,
                     help="neighbor-group size")
-parser.add_argument("--dimWorker", type=int, default=32,
+parser.add_argument("--dimWorker", type=int, default=16,
                     help="number of worker threads (MUST < 32)")
-parser.add_argument("--warpPerBlock", type=int, default=4,
+parser.add_argument("--warpPerBlock", type=int, default=8,
                     help="number of warp per block, recommended: GCN: 8, GIN: 2")
 parser.add_argument("--sharedMem", type=int, default=100,
                     help="shared memory size of each block (Quadro P6000 64(KB) sm_61), default=100(KB) for RTX3090 sm_86")
@@ -128,6 +128,7 @@ else:
 ####################################
 inputInfo = inputProperty(args.hidden, dataset, manual_mode, verbose_mode,
                           enable_rabbit, enable_sort_by_degree, rabbitRatio,
+                          density, A_tileDim, B_tileDim,
                           partSize, dimWorker, warpPerBlock, sharedMem,
                           A_blockDim, Gy_input, Gy_hidden, C_blocks_input, C_blocks_hidden)
 
@@ -155,7 +156,6 @@ if verbose_mode:
 ####################################
 
 degrees_file, AB_file = dataset.save_for_sparsert()
-
 inputLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
                                inputInfo.outputDim_input, inputInfo.C_blocks_input, inputInfo.Gy_input, verbose_mode)
 hiddenLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
@@ -163,9 +163,9 @@ hiddenLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
 
 
 start = time.perf_counter()
-inputLayerSpRT.gen_ptx_and_cubin()
+inputLayerSpRT.gen_ptx_and_cubin(inputInfo)
 inputLayerSpRT.get_func_handle()
-hiddenLayerSpRT.gen_ptx_and_cubin()
+hiddenLayerSpRT.gen_ptx_and_cubin(inputInfo)
 hiddenLayerSpRT.get_func_handle()
 elapsed = time.perf_counter() - start
 if verbose_mode:

@@ -109,10 +109,10 @@ class inputProperty(object):
 
     def decider_split(self):
         self.density = self.dataset_obj.avg_density
-        # self.A_tileDim = 80  # TODO
-        # self.B_tileDim = 80
-        self.A_tileDim = 16
-        self.B_tileDim = 16
+        self.A_tileDim = 80  # TODO
+        self.B_tileDim = 80
+        # self.A_tileDim = 16
+        # self.B_tileDim = 16
         # self.A_tileDim = 2
         # self.B_tileDim = 2
 

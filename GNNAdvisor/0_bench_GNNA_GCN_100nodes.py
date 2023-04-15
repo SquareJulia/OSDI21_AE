@@ -2,32 +2,34 @@
 import os
 os.environ["PYTHONWARNINGS"] = "ignore"
 
-
-run_GCN = True              # whether to run GCN model.
-# whether to enable rabbit reordering in auto and manual mode.
+# adjust
 enable_rabbit = True
-# whether to use the manually configure the setting.
-manual_mode = False
-# whether to printout more information such as the layerwise parameter.
+enable_sort_by_degree = True
+rabbitRatio = 0.5
+density = 0.001
+A_tileDim = 80
+B_tileDim = 80
+
+A_blockDim = 8
+
+partSize = 32
+dimWorker = 16
+warpPerBlock = 8        # only effective in manual model
+
+
+manual_mode = True
 verbose_mode = True
-# loadFromTxt = False       # whether to load data from a plain txt file.
 loadFromTxt = True
 
-if run_GCN:
-    model = 'gcn'
-    warpPerBlock = 8        # only effective in manual model
-    hidden = [16]  # TODO
-else:
-    model = 'gin'
-    # only effective in manual model 2 for citeseer 6 for remaining datasets
-    warpPerBlock = 2
-    hidden = [64]
 
-partsize_li = [32]          # only effective in manual model
+hidden = [16]  # TODO
+
+dataDir = '../my-test-graphs'
+# dataDir = '../osdi-ae-graphs'
 
 dataset = [
     # ('g1.txt', 1000, 5),
-    ('g100nodes.txt', 1000, 2)
+    ('g100nodes.txt', 1000, 7)
     # ('citeseer', 3703, 6),
     # ('cora', 1433, 7),
     # ('pubmed'	        , 500	    , 3   ),
@@ -46,16 +48,15 @@ dataset = [
     # ( 'soc-BlogCatalog'	       	 , 128  , 39),
     # ( 'amazon0601'  	         , 96	, 22),
 ]
-dataDir = '../my-test-graphs'
-# dataDir = '../osdi-ae-graphs'
+
 
 for partsize in partsize_li:
     for hid in hidden:
         for data, d, c in dataset:
             command = "python GNNA_main.py --dataset {} --dim {} --hidden {} \
-                        --classes {} --partSize {} --model {} --warpPerBlock {}\
+                        --classes {} --partSize {}  --warpPerBlock {}\
                         --manual_mode {} --verbose_mode {} --enable_rabbit {} --loadFromTxt {} --dataDir {}"
-            command = command.format(data, d, hid, c, partsize, model, warpPerBlock,
+            command = command.format(data, d, hid, c, partsize, warpPerBlock,
                                      manual_mode, verbose_mode, enable_rabbit, loadFromTxt, dataDir)
             # command = "python GNNA_main.py -loadFromTxt --dataset {} --partSize {} --dataDir {}".format(data, partsize, '/home/yuke/.graphs/orig')
             os.system(command)

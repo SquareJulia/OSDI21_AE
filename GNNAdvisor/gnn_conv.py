@@ -95,8 +95,10 @@ class GNNAFunction(torch.autograd.Function):
         d_X_prime_ref = torch.mm(a_hat_hat_for_test, d_output.cpu())
         d_input_ref = torch.mm(d_X_prime_ref, weight.permute(1, 0).cpu())
         d_weight_ref = torch.mm(X.permute(1, 0).cpu(), d_X_prime_ref)
-        compare_tensor(d_input, d_input_ref)
-        compare_tensor(d_weight, d_weight_ref)
+        if not compare_tensor(d_input, d_input_ref):
+            log.fail('input error')
+        if not compare_tensor(d_weight, d_weight_ref):
+            log.fail('weight error')
         # if not compare_tensor(d_input, d_input_ref) or not compare_tensor(d_weight, d_weight_ref):
         #     torch.set_printoptions(precision=4, sci_mode=False)
         #     print('d_input:')

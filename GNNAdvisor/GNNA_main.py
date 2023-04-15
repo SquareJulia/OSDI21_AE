@@ -82,11 +82,11 @@ parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False',
                     help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
-parser.add_argument('--enable_sort_by_degree', type=str, choices=['True', 'False'], default='False',
+parser.add_argument('--enable_sort_by_degree', type=str, choices=['True', 'False'], default='True',
                     help="True: enable reordering by degrees, False, disable reordering by degrees, default: False (disable for both manual and auto mode).")
-parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='False',
+parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='True',
                     help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
-parser.add_argument("--rabbitRatio", type=float, default=0.5,
+parser.add_argument("--rabbitRatio", type=float, default=0.6,
                     help="Ratio of (possibly reordered by degree descending) vertices to be reordered by rabbit, default=0.8")
 
 
@@ -285,7 +285,9 @@ if __name__ == '__main__':
     start_train = time.perf_counter()
     # for _ in tqdm(range(1, args.num_epoches + 1)):
     #     train()
-    train()
+    # train()
+    for _ in range(3):
+        train()
     torch.cuda.synchronize()
     train_time = time.perf_counter() - start_train
 

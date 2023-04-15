@@ -54,24 +54,7 @@ class GNNAFunction(torch.autograd.Function):
                                SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())[0]
 
         X_prime_ref = torch.mm(a_hat_hat_for_test, torch.mm(X, weight).cpu())
-        compare_tensor(X_prime, X_prime_ref)
-        # if not compare_tensor(X_prime, X_prime_ref):
-        #     print('X_prime:')
-        #     torch.set_printoptions(precision=5, sci_mode=False)
-        #     print(X_prime)
-        #     print()
-        #     print('X_prime_ref:')
-        #     print(X_prime_ref)
-        #     log.info('ref:')
-        #     print('a_hat_hat:')
-        #     print(a_hat_hat_for_test)
-        #     print('X:')
-        #     print(X)
-        #     print('weight:')
-        #     print(weight)
-        # print(X.size())
-        # print(weight.size())
-        # X_prime = torch.mm(X, weight)
+        compare_tensor(X_prime, X_prime_ref, 'X_prime')
         return X_prime
 
     @staticmethod
@@ -86,67 +69,19 @@ class GNNAFunction(torch.autograd.Function):
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        d_X, d_weight, d_X_prime, X_ret, X_transposed_ret = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
-                                                                          inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
-                                                                          ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
-                                                                          SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
-                                                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())
+        d_X, d_weight = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
+                                      inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
+                                      ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
+                                      SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
+                                      SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())
 
         d_X_prime_ref = torch.mm(a_hat_hat_for_test, d_output.cpu())
         d_X_ref = torch.mm(d_X_prime_ref, weight.transpose(0, 1).cpu())
-        d_weight_ref = torch.mm(X_transposed_ret, d_X_prime.cuda()).cpu() 
-        # d_weight_ref = torch.mm(X.transpose(0, 1).cpu(), d_X_prime_ref)
+        d_weight_ref = torch.mm(X.transpose(0, 1).cpu(), d_X_prime_ref)
 
-        a_hat_hat_for_test_gpu = a_hat_hat_for_test.cuda()
-        d_X_prime_ref_gpu = torch.mm(a_hat_hat_for_test_gpu, d_output) #OK
-        d_X_prime_ref_gpu_cpu = torch.mm(a_hat_hat_for_test_gpu, d_output).cpu() #OK
-        d_X_ref_gpu = torch.mm(d_X_prime_ref_gpu, weight.transpose(0, 1)).cpu() #OK
-        d_weight_ref_gpu = torch.mm(X.transpose(0, 1), d_X_prime_ref_gpu).cpu() #FAIL
-        d_weight_ref_gpu_same_XT = torch.mm(
-            X_transposed_ret, d_X_prime_ref_gpu).cpu() #FAIL
-        d_weight_ref_gpu_same_Xprime = torch.mm(
-            X.transpose(0, 1), d_X_prime.cuda()).cpu() 
-
-        X_ref = X.cpu()
-        X_transposed_ref = X.transpose(0, 1).cpu()
-
-        compare_tensor(d_X_prime, d_X_prime_ref, 'd_X_prime')
         compare_tensor(d_X, d_X_ref, 'd_X')
         compare_tensor(d_weight, d_weight_ref, 'd_weight')
-        compare_tensor(X_transposed_ret,
-                       X_transposed_ref, 'X_transposed')
-        compare_tensor(X_ret, X_ref, 'X')
 
-        compare_tensor(d_X_prime, d_X_prime_ref_gpu_cpu, 'd_X_prime_gpu')
-        compare_tensor(d_X, d_X_ref_gpu, 'd_X_gpu')
-        compare_tensor(d_weight, d_weight_ref_gpu, 'd_weight_gpu')
-        compare_tensor(d_weight, d_weight_ref_gpu_same_XT,
-                       'd_weight_gpu_same_XT')
-        compare_tensor(d_weight, d_weight_ref_gpu_same_Xprime,
-                       'd_weight_gpu_same_Xprime') #OK
-
-        # if not compare_tensor(d_X, d_X_ref) or not compare_tensor(d_weight, d_weight_ref):
-        #     torch.set_printoptions(precision=4, sci_mode=False)
-        #     print('d_X:')
-        #     print(d_X)
-        #     print('d_input_ref:')
-        #     print(d_input_ref)
-        #     print('d_weight:')
-        #     print(d_weight)
-        #     print('d_weight_ref:')
-        #     print(d_weight_ref)
-        #     print('a_hat_hat:')
-        #     print(a_hat_hat_for_test)
-        #     print('d_output:')
-        #     print(d_output)
-        #     print('d_X_prime_ref:')
-        #     print(d_X_prime_ref)
-
-        # print(weight.size())
-        # weight_p = weight.permute(1,0)
-        # print(weight_p.size())
-        # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
-        # d_weight = torch.mm(X.permute(1,0), d_X_prime);
         return d_X, d_weight, None, None, None
 
 

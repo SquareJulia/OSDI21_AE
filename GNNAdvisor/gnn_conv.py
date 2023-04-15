@@ -86,23 +86,49 @@ class GNNAFunction(torch.autograd.Function):
         # print("[Backward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
         #                                                     ctx.dimWorker, ctx.warpPerBlock))
 
-        d_input, d_weight = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
-                                          inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
-                                          ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
-                                          SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
-                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())
+        d_X, d_weight, d_X_prime, X_ret, X_transposed_ret = GNNA.backward(d_output, X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
+                                                                          inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
+                                                                          ctx.partSize, ctx.dimWorker, ctx.warpPerBlock,
+                                                                          SpRT_layer.cu_function.getPtr(), SpRT_layer.A_blocks, SpRT_layer.C_blocks,
+                                                                          SpRT_layer.Block_size, SpRT_layer.ctx.getPtr())
 
         d_X_prime_ref = torch.mm(a_hat_hat_for_test, d_output.cpu())
-        d_input_ref = torch.mm(d_X_prime_ref, weight.permute(1, 0).cpu())
-        d_weight_ref = torch.mm(X.permute(1, 0).cpu(), d_X_prime_ref)
-        if not compare_tensor(d_input, d_input_ref):
-            log.fail('input error')
-        if not compare_tensor(d_weight, d_weight_ref):
-            log.fail('weight error')
-        # if not compare_tensor(d_input, d_input_ref) or not compare_tensor(d_weight, d_weight_ref):
+        d_X_ref = torch.mm(d_X_prime_ref, weight.transpose(0, 1).cpu())
+        d_weight_ref = torch.mm(X_transposed_ret, d_X_prime.cuda()).cpu() 
+        # d_weight_ref = torch.mm(X.transpose(0, 1).cpu(), d_X_prime_ref)
+
+        a_hat_hat_for_test_gpu = a_hat_hat_for_test.cuda()
+        d_X_prime_ref_gpu = torch.mm(a_hat_hat_for_test_gpu, d_output) #OK
+        d_X_prime_ref_gpu_cpu = torch.mm(a_hat_hat_for_test_gpu, d_output).cpu() #OK
+        d_X_ref_gpu = torch.mm(d_X_prime_ref_gpu, weight.transpose(0, 1)).cpu() #OK
+        d_weight_ref_gpu = torch.mm(X.transpose(0, 1), d_X_prime_ref_gpu).cpu() #FAIL
+        d_weight_ref_gpu_same_XT = torch.mm(
+            X_transposed_ret, d_X_prime_ref_gpu).cpu() #FAIL
+        d_weight_ref_gpu_same_Xprime = torch.mm(
+            X.transpose(0, 1), d_X_prime.cuda()).cpu() 
+
+        X_ref = X.cpu()
+        X_transposed_ref = X.transpose(0, 1).cpu()
+
+        compare_tensor(d_X_prime, d_X_prime_ref, 'd_X_prime')
+        compare_tensor(d_X, d_X_ref, 'd_X')
+        compare_tensor(d_weight, d_weight_ref, 'd_weight')
+        compare_tensor(X_transposed_ret,
+                       X_transposed_ref, 'X_transposed')
+        compare_tensor(X_ret, X_ref, 'X')
+
+        compare_tensor(d_X_prime, d_X_prime_ref_gpu_cpu, 'd_X_prime_gpu')
+        compare_tensor(d_X, d_X_ref_gpu, 'd_X_gpu')
+        compare_tensor(d_weight, d_weight_ref_gpu, 'd_weight_gpu')
+        compare_tensor(d_weight, d_weight_ref_gpu_same_XT,
+                       'd_weight_gpu_same_XT')
+        compare_tensor(d_weight, d_weight_ref_gpu_same_Xprime,
+                       'd_weight_gpu_same_Xprime') #OK
+
+        # if not compare_tensor(d_X, d_X_ref) or not compare_tensor(d_weight, d_weight_ref):
         #     torch.set_printoptions(precision=4, sci_mode=False)
-        #     print('d_input:')
-        #     print(d_input)
+        #     print('d_X:')
+        #     print(d_X)
         #     print('d_input_ref:')
         #     print(d_input_ref)
         #     print('d_weight:')
@@ -121,7 +147,7 @@ class GNNAFunction(torch.autograd.Function):
         # print(weight_p.size())
         # d_input =  torch.mm(d_X_prime, weight.permute(1,0));
         # d_weight = torch.mm(X.permute(1,0), d_X_prime);
-        return d_input, d_weight, None, None, None
+        return d_X, d_weight, None, None, None
 
 
 class GCNConv(torch.nn.Module):

@@ -581,9 +581,12 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     // printf("\n================================\n");
 
     auto d_input = torch::mm(d_input_prime, W.transpose(0, 1));
+    auto testX = X;
+    auto X_transposed = X.transpose(0, 1);
     auto d_weight = torch::mm(X.transpose(0, 1), d_input_prime);
 
-    return {d_input, d_weight};
+    return {d_input, d_weight, d_input_prime, testX, X_transposed};
+    // return {d_input, d_weight};
 }
 
 template <typename scalar_t>

@@ -7,6 +7,7 @@
 *rabbit.egg-info
 data/*
 osdi-ae-graphs/*
+my-test-graphs/*
 *.pyc
 *pycache*
 *.egg-info
@@ -18,6 +19,7 @@ osdi-ae-graphs-mtx.tar.gz
 *.csv
 cmake-3.16.5
 *__pycache__*
-sprt/dist/*/*
 GNNAdvisor/error.txt
+GNNAdvisor/logs/*
+GNNAdvisor/new-logs/*
 SparseRT/materials/*

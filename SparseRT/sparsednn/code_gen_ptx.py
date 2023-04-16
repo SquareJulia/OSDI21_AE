@@ -150,12 +150,6 @@ def generate_from_B(Ny_indices, B_indices, degrees, block, NY, load_base_reg, st
 
     for group in range(GY):
 
-        # if block == 0 and group == 0:
-        #     if HALF:
-        #         ptx = ".reg .f32 load_reg;\n\t.reg .f32 temp_reg;\n\t.reg .f32 virg_reg, bias_reg, pred_reg,zero_reg;\n\t mov.u32 zero_reg, 0x00000000;\n\t"
-        #     else:
-        #         ptx = ".reg .f32 load_reg;\n\t"
-        # else:
         ptx = "\n\t"
 
         virgin = np.zeros(NY)
@@ -304,8 +298,6 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     # print(compile_command)
     start = time.perf_counter()
     os.system(compile_command)
-    # os.system("nvcc -arch=sm_70 -I /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy -L /home/xiaosiyier/projects/OSDI21_AE/SparseRT/build/cnpy/build -w -O3 -ptx -o " + temp_ptx_file_name +
-    #   " " + temp_cu_file_name + " --std=c++11 --compiler-options=\"-fsingle-precision-constant\" -lcnpy -lz")
     os.sync()
     # log.info('# Compile time(s): {:.3f}'.format(time.perf_counter()-start))
     start = time.perf_counter()
@@ -315,8 +307,6 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
     ptxs = []
     store_ptxs = []
 
-    # print('load_base_reg:{}'.format(load_base_reg))
-    # print('store_base_reg:{}'.format(store_base_reg))
     start = time.perf_counter()
     for block in range(A_blocks):
         A_offset = bounds[block]
@@ -329,8 +319,6 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         ptxs.append(block_ptxs)
         store_ptxs.append(store_ptx)
 
-    # print('store_ptxs:')
-    # print(store_ptxs)
 
     if RESIDUAL or NO_RELU:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
@@ -338,7 +326,6 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         insert_ptx(temp_ptx_file_name, outfile, ptxs, store_ptxs)
     # log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
 
-#GX = 191
 
 
 gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file)

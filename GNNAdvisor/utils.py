@@ -31,6 +31,13 @@ def checkCudaErrors(result):
         return result[1:]
 
 
+def all_files(*files):
+    for f in files:
+        if not os.path.isfile(f):
+            return False
+    return True
+
+
 def remove_files_if_exists(*files):
     for f in files:
         if os.path.isfile(f):

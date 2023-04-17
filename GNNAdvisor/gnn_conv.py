@@ -42,11 +42,6 @@ class GNNAFunction(torch.autograd.Function):
 
         ctx.a_hat_hat_for_test = a_hat_hat_for_test
 
-        # print("[Foward]: {}\n{}\n{}\n{}\n{}".format(inputInfo.row_pointers, inputInfo.column_index,
-        #                                 inputInfo.degrees, inputInfo.partPtr, inputInfo.part2Node))
-        # print("[Foward]: partSize: {}, dimWorker: {}, warpPerBlock: {}".format(ctx.partSize, \
-        #                                                     ctx.dimWorker, ctx.warpPerBlock))
-
         X_prime = GNNA.forward(X, weight, inputInfo.dataset_obj.dense_row_pointers, inputInfo.dataset_obj.dense_column_index,
                                inputInfo.dataset_obj.degrees_gpu, inputInfo.partPtr, inputInfo.part2Node,
                                inputInfo.partSize, inputInfo.dimWorker, inputInfo.warpPerBlock,

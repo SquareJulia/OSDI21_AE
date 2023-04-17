@@ -22,11 +22,11 @@ class SparseRTLayer():
         self.Gy = Gy
         self.Block_size = (C_dim//C_blocks)*self.Gy
         self.verbose = verbose
-        self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())
+        self.ctx = None
 
         self.ptx_file = ''
         self.cubin_file = ''
-        self.cu_function = cuda.CUfunction()
+        self.cu_function = None
 
     def gen_ptx(self):
         gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
@@ -71,7 +71,7 @@ class SparseRTLayer():
         r_temp = 'r{}'.format(
             inputInfo.rabbitBarrier) if inputInfo.reorder_rabbit_flag else 'x'
         template = '{}_{}_{}{}_{}_{}'.format(
-            dist_without_suffix, self.C_dim, d_temp, r_temp, inputInfo.density, inputInfo.A_tileDim)
+            dist_without_suffix, self.C_dim, d_temp, r_temp, inputInfo.density, inputInfo.A_tileDim)  # TODO:use template
         self.ptx_file = '{}.ptx'.format(template)
         self.cubin_file = '{}.cubin'.format(template)
         self.prepare_dist_path(osp.dirname(self.ptx_file))
@@ -83,3 +83,6 @@ class SparseRTLayer():
             cuda.cuModuleLoad(str2cstr(self.cubin_file)))
         self.cu_function = checkCudaErrors(cuda.cuModuleGetFunction(
             module, b'_Z2mmPPKfPPf'))
+
+    def get_ctx(self):
+        self.ctx = checkCudaErrors(cuda.cuCtxGetCurrent())

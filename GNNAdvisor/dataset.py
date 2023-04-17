@@ -132,14 +132,14 @@ class custom_dataset(torch.nn.Module):
         Generate node embedding for nodes.
         Called from __init__.
         '''
-        self.x = torch.randn(self.num_nodes, dim).cuda()
+        self.x = torch.randn(self.num_nodes, dim)
 
     def init_labels(self, num_class):
         '''
         Generate the node label.
         Called from __init__.
         '''
-        self.y = torch.ones(self.num_nodes).long().cuda()
+        self.y = torch.ones(self.num_nodes).long()
 
     def degree_reorder(self):
         '''

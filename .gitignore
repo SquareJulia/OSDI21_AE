@@ -7,7 +7,6 @@
 *rabbit.egg-info
 data/*
 osdi-ae-graphs/*
-my-test-graphs/*
 *.pyc
 *pycache*
 *.egg-info
@@ -23,3 +22,4 @@ GNNAdvisor/error.txt
 GNNAdvisor/logs/*
 GNNAdvisor/new-logs/*
 SparseRT/materials/*
+preprocessed/*

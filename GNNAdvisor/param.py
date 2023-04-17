@@ -28,6 +28,7 @@ class inputProperty(object):
 
         self.num_nodes = dataset_obj.num_nodes
         self.num_classes = dataset_obj.num_classes
+        self.num_features = dataset_obj.num_features
         self.avgNodeDegree = dataset_obj.avg_degree
         self.avgEdgeSpan = dataset_obj.avg_edgeSpan
 
@@ -43,6 +44,7 @@ class inputProperty(object):
         self.enable_rabbit = enable_rabbit
         self.reorder_by_degree_flag = False
         self.reorder_rabbit_flag = False
+        self.rabbitRatio = rabbitRatio
         self.rabbitBarrier = math.floor(self.num_nodes*rabbitRatio)  # TODO
 
         # Mode-divergence related

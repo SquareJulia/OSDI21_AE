@@ -82,18 +82,7 @@ def adj_list_to_csr(adj_list):
     return torch.IntTensor(row_pointers), torch.IntTensor(column_index)
 
 
-def reorder_by_degree(edge_index, degrees, desc=True):
-    ''' Reorder vertices by degrees. Modify edge_index in-place.
-    '''
-    n = len(degrees)
-    order = [[i, degrees[i]] for i in range(n)]
-    order.sort(key=lambda v: v[1], reverse=desc)
-    mapping = [0]*n  # old id => new id
-    for v in range(n):
-        mapping[order[v][0]] = v
-    for e in range(len(edge_index[0])):
-        edge_index[0][e] = mapping[edge_index[0][e]]
-        edge_index[1][e] = mapping[edge_index[1][e]]
+
 
 
 def degrees_from_edge_index(edge_index, num_nodes):

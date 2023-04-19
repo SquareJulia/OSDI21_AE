@@ -1,6 +1,7 @@
 import math
 from utils import factors, first_ge
 import log
+from reorder import *
 
 MAX_BLOCK_SIZE = 1024
 
@@ -13,7 +14,7 @@ class inputProperty(object):
                  dataset_obj=None,
                  manual_mode=True,
                  verbose=False,
-                 enable_rabbit=None, enable_sort_by_degree=None, rabbitRatio=None,
+                 reorder_strategy_name=None,
                  density=None, A_tileDim=None, B_tileDim=None,
                  partSize=None, dimWorker=None, warpPerBlock=None, sharedMem=None,
                  A_blockDim=None, Gy_input=None, Gy_hidden=None, C_blocks_input=None, C_blocks_hidden=None):
@@ -21,8 +22,8 @@ class inputProperty(object):
         if dataset_obj is None:
             raise ValueError("Dataset object MUST SET !!!")
 
-        if enable_rabbit and (rabbitRatio is None or rabbitRatio < 0 or rabbitRatio > 1):
-            raise ValueError("rabbitRatio MUST BE BETWEEN 0 and 1 !!!")
+        if reorder_strategy_name not in ReorderStrategy.__members__:
+            raise ValueError('Reorder strategy not valid !!!')
 
         self.dataset_obj = dataset_obj
 
@@ -40,12 +41,7 @@ class inputProperty(object):
         self.state_set_input = False
 
         # Reorder
-        self.enable_sort_by_degree = enable_sort_by_degree
-        self.enable_rabbit = enable_rabbit
-        self.reorder_by_degree_flag = False
-        self.reorder_rabbit_flag = False
-        self.rabbitRatio = rabbitRatio
-        self.rabbitBarrier = math.floor(self.num_nodes*rabbitRatio)  # TODO
+        self.reorder_strategy = ReorderStrategy[reorder_strategy_name]
 
         # Mode-divergence related
         self.density = density
@@ -154,17 +150,10 @@ class inputProperty(object):
         manual_mode: using user-specified parameters
         auto_mode:   determining the parameters according to the GPU resources and scheduling performance consideration.
         '''
-        # Determine whether to reorder by degree and/or by community-detection(rabbit).
-        if self.manual_mode:
-            self.dataset_obj.reorder_by_degree_flag = self.reorder_by_degree_flag = self.enable_sort_by_degree
-            self.dataset_obj.reorder_rabbit_flag = self.reorder_rabbit_flag = self.enable_rabbit
-        else:
-            self.dataset_obj.reorder_by_degree_flag = self.reorder_by_degree_flag = True  # TODO
-            self.dataset_obj.reorder_rabbit_flag = self.reorder_rabbit_flag = math.sqrt(
-                self.avgEdgeSpan) > math.sqrt(self.num_nodes)/100
-            # self.dataset_obj.reorder_rabbit_flag = self.reorder_rabbit_flag = False  # TODO
-        self.dataset_obj.degree_reorder()
-        self.dataset_obj.rabbit_reorder(self.rabbitBarrier)
+        # Determine whether by community-detection(default rabbit).
+        if not self.manual_mode and math.sqrt(self.avgEdgeSpan) > math.sqrt(self.num_nodes)/100:
+            self.reorder_strategy = ReorderStrategy['RABBIT']
+        self.dataset_obj.reorder(self.reorder_strategy)
         self.dataset_obj.gen_degrees_hat()
 
         # Determine other parameters.
@@ -201,10 +190,7 @@ class inputProperty(object):
 
     def print_param_general(self):
         log.info('Reorder and split params:')
-        print('reorder_by_degree_flag: {}'.format(self.reorder_by_degree_flag))
-        print('reorder_rabbit_flag: {}'.format(self.reorder_rabbit_flag))
-        if self.reorder_rabbit_flag:
-            print('rabbitBarrier: {}'.format(self.rabbitBarrier))
+        print('reorder strategy: {}'.format(self.reorder_strategy.name))
         print('density: {:.3f}'.format(self.density))
         print('A_tileDim: {}'.format(self.A_tileDim))
         print('B_tileDim: {}'.format(self.B_tileDim))

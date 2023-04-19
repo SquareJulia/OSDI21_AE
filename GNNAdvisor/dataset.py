@@ -7,10 +7,10 @@ import os.path as osp
 import os
 
 from scipy.sparse import *
-import rabbit
 from constants import SPARSERT_MATERIALS_DATA_DIR, SPARSERT_MATERIALS_DIST_DIR
 import log
 from graph_utils import *
+from reorder import *
 
 
 def func(x):
@@ -41,8 +41,6 @@ class custom_dataset(torch.nn.Module):
         self.num_classes = num_class
         self.edge_index = None
 
-        self.reorder_rabbit_flag = False
-        self.reorder_by_degree_flag = False
         self.verbose_flag = verbose
 
         self.avg_degree = -1
@@ -112,11 +110,7 @@ class custom_dataset(torch.nn.Module):
             print("# avg_degree: {:.2f}".format(self.avg_degree))
             print("# avg_edgeSpan: {}".format(int(self.avg_edgeSpan)))
 
-        # plus Identity matrix
-        src_li = np.concatenate((src_li, [i for i in range(self.num_nodes)]))
-        dst_li = np.concatenate((dst_li, [i for i in range(self.num_nodes)]))
         self.edge_index = np.stack([src_li, dst_li])
-        self.num_edges += self.num_nodes
         if self.verbose_flag:
             log.info('# edges: {}'.format(self.num_edges))
         self.avg_density = self.num_edges/(self.num_nodes*self.num_nodes)
@@ -126,6 +120,13 @@ class custom_dataset(torch.nn.Module):
 
         # self.val = [1] * self.num_edges
         # self.generate_csr_and_degrees()
+
+    def plus_identity_matrix(self):
+        ''' Operate on edge_index. Modify edge_index, num_edges
+        '''
+        self.edge_index = [np.concatenate((self.edge_index[0], [i for i in range(self.num_nodes)])),
+                           np.concatenate((self.edge_index[1], [i for i in range(self.num_nodes)]))]
+        self.num_edges += self.num_nodes
 
     def init_embedding(self, dim):
         '''
@@ -141,51 +142,19 @@ class custom_dataset(torch.nn.Module):
         '''
         self.y = torch.ones(self.num_nodes).long()
 
-    def degree_reorder(self):
-        '''
-        If the decider set this reorder flag,
-        then reorder and rebuild an edge_index,
-        otherwise skipped this reorder routine.
-        Called from external.
-        '''
-        if not self.reorder_by_degree_flag:
+    def reorder(self, reorder_strategy):
+        if reorder_strategy is ReorderStrategy.NONE:
             if self.verbose_flag:
-                log.info('Degree reorder flag is not set. Skipped...')
-        else:
-            if self.verbose_flag:
-                log.info('Degree reorder flag is set. Continue...')
-                # print('Original edge_index:\n', self.edge_index)
-            start = time.perf_counter()
-            reorder_by_degree(self.edge_index, self.degrees_cpu)
-            reorder_time = time.perf_counter() - start
+                log.info('No reorder strategy is applied. Skipped...')
+            return
+        start = time.perf_counter()
+        self.edge_index = reorder_with_strategy(
+            reorder_strategy, self.edge_index, self.degrees_cpu, self.num_nodes)
+        reorder_time = time.perf_counter() - start
 
-            if self.verbose_flag:
-                log.done(
-                    "# Reorder by degree time (s): {:.3f}".format(reorder_time))
-                # print("Reordered edge_index:\n", self.edge_index)
-
-    def rabbit_reorder(self, rabbitBarrier):
-        '''
-        If the decider set this reorder flag,
-        then reorder and rebuild an edge_index.
-        otherwise skipped this reorder routine.
-        Called from external.
-        '''
-        if not self.reorder_rabbit_flag:
-            if self.verbose_flag:
-                log.info("Rabbit-reorder flag is not set. Skipped...")
-        else:
-            if self.verbose_flag:
-                log.info("Rabbit-reorder flag is set. Continue...")
-                # print("Original edge_index:\n", self.edge_index)
-            start = time.perf_counter()
-            self.edge_index = rabbit.reorder(
-                torch.IntTensor(self.edge_index), rabbitBarrier)
-            reorder_time = time.perf_counter() - start
-
-            if self.verbose_flag:
-                log.done("# Reorder time (s): {:.3f}".format(reorder_time))
-                # print("Reordered edge_index:\n", self.edge_index)
+        if self.verbose_flag:
+            log.done(
+                "# {} Reorder time (s): {:.3f}".format(reorder_strategy.name, reorder_time))
 
     def split_by_density(self, density, TILE_ROW, TILE_COL):
         self.dense_adj, self.sparse_adj = split_adj_list_by_density(
@@ -270,15 +239,24 @@ if __name__ == '__main__':
     # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "cora.npz")
     # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "amazon0505.npz")
     path = osp.join(
-        "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "g6nodes.txt")
+        "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "g10nodes.txt")
     dataset = custom_dataset(path, 16, 10, load_from_txt=True, verbose=True)
     # reorder
-    dataset.reorder_rabbit_flag = True
-    dataset.reorder_by_degree_flag = True
     dataset.print_adj_matrix()
-    dataset.degree_reorder()
+    dataset.reorder(ReorderStrategy.NONE)
     dataset.print_adj_matrix()
-    dataset.rabbit_reorder(rabbitBarrier=4)
+    dataset.reorder(ReorderStrategy.RANDOM)
+    dataset.print_adj_matrix()
+    dataset.degrees_cpu = degrees_from_edge_index(
+        dataset.edge_index, dataset.num_nodes)
+    dataset.reorder(ReorderStrategy.DEGREE)
+    dataset.print_adj_matrix()
+    dataset.reorder(ReorderStrategy.RABBIT)
+    dataset.print_adj_matrix()
+    dataset.reorder(ReorderStrategy.METIS)
+    dataset.print_adj_matrix()
+    dataset.plus_identity_matrix()
+    print('plus I')
     dataset.print_adj_matrix()
     dataset.edge_index_to_adj_list()
     # split

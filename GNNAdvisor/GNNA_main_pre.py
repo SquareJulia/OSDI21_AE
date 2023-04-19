@@ -78,25 +78,19 @@ parser.add_argument('--single_spmm', type=str, choices=['True', 'False'], defaul
 parser.add_argument('--verify_spmm', type=str, choices=['True', 'False'], default='False',
                     help="True: verify the output correctness of a single SpMM (neighbor aggregation) kernel against the CPU reference implementation.")
 
-parser.add_argument('--enable_sort_by_degree', type=str, choices=['True', 'False'], default='True',
-                    help="True: enable reordering by degrees, False, disable reordering by degrees, default: False (disable for both manual and auto mode).")
-parser.add_argument('--enable_rabbit', type=str, choices=['True', 'False'], default='True',
-                    help="True: enable rabbit reordering, False, disable rabbit reordering, default: False (disable for both manual and auto mode).")
-parser.add_argument("--rabbitRatio", type=float, default=0.6,
-                    help="Ratio of (possibly reordered by degree descending) vertices to be reordered by rabbit, default=0.8")
-
+parser.add_argument('--reorder_strategy', type=str, choices=['None', 'random', 'degree', 'rabbit', 'METIS'], default='None',
+                    help="Strategy of reordering the input graph. Possible choices are: None, random, degree, rabbit, METIS; Default: None.")
 
 args = parser.parse_args()
 print(args)
 
 partSize, dimWorker, warpPerBlock, sharedMem = args.partSize, args.dimWorker, args.warpPerBlock, args.sharedMem
 A_blockDim, Gy_input, Gy_hidden, C_blocks_input, C_blocks_hidden = args.A_blockDim, args.Gy_input, args.Gy_hidden, args.C_blocks_input, args.C_blocks_hidden
-rabbitRatio = args.rabbitRatio
 density, A_tileDim, B_tileDim = args.density, args.A_tileDim, args.B_tileDim
 manual_mode = args.manual_mode == 'True'
 verbose_mode = args.verbose_mode == 'True'
-enable_rabbit = args.enable_rabbit == 'True'
-enable_sort_by_degree = args.enable_sort_by_degree == 'True'
+
+reorder_strategy_name = reorder_strategy.upper()
 loadFromTxt = args.loadFromTxt == 'True'
 single_spmm = args.single_spmm == 'True'
 verify_spmm = args.verify_spmm == 'True'
@@ -123,7 +117,7 @@ else:
 # Building input property profile.
 ####################################
 inputInfo = inputProperty(args.hidden, dataset, manual_mode, verbose_mode,
-                          enable_rabbit, enable_sort_by_degree, rabbitRatio,
+                          reorder_strategy_name,
                           density, A_tileDim, B_tileDim,
                           partSize, dimWorker, warpPerBlock, sharedMem,
                           A_blockDim, Gy_input, Gy_hidden, C_blocks_input, C_blocks_hidden)
@@ -132,6 +126,7 @@ inputInfo = inputProperty(args.hidden, dataset, manual_mode, verbose_mode,
 # Decider for parameter selection.(Reorder steps included)
 ####################################
 inputInfo.decider()
+dataset.plus_identity_matrix()
 dataset.edge_index_to_adj_list()
 dataset.split_by_density(
     inputInfo.density, inputInfo.A_tileDim, inputInfo.B_tileDim)

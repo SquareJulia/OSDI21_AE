@@ -19,6 +19,7 @@ import ctypes
 from sparsert import SparseRTLayer
 import log
 from constants import *
+import shutil
 
 
 parser = argparse.ArgumentParser()
@@ -90,7 +91,7 @@ density, A_tileDim, B_tileDim = args.density, args.A_tileDim, args.B_tileDim
 manual_mode = args.manual_mode == 'True'
 verbose_mode = args.verbose_mode == 'True'
 
-reorder_strategy_name = reorder_strategy.upper()
+reorder_strategy_name = args.reorder_strategy.upper()
 loadFromTxt = args.loadFromTxt == 'True'
 single_spmm = args.single_spmm == 'True'
 verify_spmm = args.verify_spmm == 'True'
@@ -141,12 +142,26 @@ inputInfo = inputInfo.set_hidden()
 if verbose_mode:
     inputInfo.print_param_layerwise()
 
+####################################
+# Preparing file storage.
+####################################
+pre_dir = pre_dir_data_template(path)+pre_dir_params_template(inputInfo)
+pre_dataset = pre_dir+PREPROCESSED_DATASET
+pre_inputInfo = pre_dir+PREPROCESSED_INPUT_INFO
+pre_inputLayerSpRT = pre_dir+PREPROCESSED_INPUT_LAYER_SPRT
+pre_hiddenLayerSpRT = pre_dir+PREPROCESSED_HIDDEN_LAYER_SPRT
+pre_SparseRT_dir = pre_dir+PREPROCESSED_SPARSERT_DIR
+
+if osp.exists(pre_dir):
+    shutil.rmtree(pre_dir)
+
+os.makedirs(pre_SparseRT_dir)
 
 ####################################
 # SparseRT
 ####################################
 
-degrees_file, AB_file = dataset.save_for_sparsert()
+degrees_file, AB_file = dataset.save_for_sparsert(pre_SparseRT_dir)
 inputLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
                                inputInfo.outputDim_input, inputInfo.C_blocks_input, inputInfo.Gy_input, verbose_mode)
 hiddenLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
@@ -154,8 +169,10 @@ hiddenLayerSpRT = SparseRTLayer(degrees_file, AB_file, inputInfo,
 
 
 start = time.perf_counter()
-inputLayerSpRT.gen_ptx_and_cubin(inputInfo)
-hiddenLayerSpRT.gen_ptx_and_cubin(inputInfo)
+inputLayerSpRT.gen_ptx_and_cubin(
+    inputInfo, pre_SparseRT_dir+SPARSERT_INPUT_LAYER)
+hiddenLayerSpRT.gen_ptx_and_cubin(
+    inputInfo, pre_SparseRT_dir+SPARSERT_HIDDEN_LAYER)
 elapsed = time.perf_counter() - start
 if verbose_mode:
     log.done(
@@ -183,17 +200,7 @@ inputInfo.part2Node = part2Node.int()
 # Saving preprocessing results.
 ####################################
 
-pre_dir = pre_dir_data_template(path)+pre_dir_params_template(inputInfo)
-pre_dataset = pre_dir+PREPROCESSED_DATASET
-pre_inputInfo = pre_dir+PREPROCESSED_INPUT_INFO
-pre_inputLayerSpRT = pre_dir+PREPROCESSED_INPUT_LAYER_SPRT
-pre_hiddenLayerSpRT = pre_dir+PREPROCESSED_HIDDEN_LAYER_SPRT
 
-if not osp.exists(pre_dir):
-    os.makedirs(pre_dir)
-else:
-    remove_files_if_exists(pre_dataset, pre_inputInfo,
-                           pre_inputLayerSpRT, pre_hiddenLayerSpRT)
 torch.save(dataset, pre_dataset)
 torch.save(inputInfo, pre_inputInfo)
 torch.save(inputLayerSpRT, pre_inputLayerSpRT)

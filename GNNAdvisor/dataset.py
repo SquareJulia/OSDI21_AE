@@ -7,7 +7,7 @@ import os.path as osp
 import os
 
 from scipy.sparse import *
-from constants import SPARSERT_MATERIALS_DATA_DIR, SPARSERT_MATERIALS_DIST_DIR
+from constants import *
 import log
 from graph_utils import *
 from reorder import *
@@ -190,21 +190,15 @@ class custom_dataset(torch.nn.Module):
         d_a_d = degrees_coo_matrix*a_coo_matrix*degrees_coo_matrix
         return d_a_d.toarray()
 
-    def save_degrees_hat(self, basename):
+    def save_degrees_hat(self, path):
         '''
         Save D~^{-1/2} in '.npy' format for sparseRT.
         Return: file name of '.npy'.
         '''
-        path = '{}_degrees.npy'.format(basename)
-        if osp.isfile(path):
-            os.remove(path)
         np.save(path, self.degrees_cpu.numpy())
         return path
 
-    def save_AB(self, basename):
-        path = '{}_AB.npz'.format(basename)
-        if osp.isfile(path):
-            os.remove(path)
+    def save_AB(self, path):
         self.AB_coo_matrix = adj_list_to_coo_matrix(
             self.sparse_adj, self.num_nodes)
         log.info('SparseRT nnz count:{}'.format(
@@ -212,7 +206,7 @@ class custom_dataset(torch.nn.Module):
         save_npz(path, self.AB_coo_matrix)
         return path
 
-    def save_for_sparsert(self):
+    def save_for_sparsert(self, dest_dir):
         '''
         Save D^ and AB for sparseRT.
                 degrees: D~^{-1/2} in '.npy' format
@@ -221,12 +215,9 @@ class custom_dataset(torch.nn.Module):
         '''
         if self.verbose_flag:
             log.info('# Saving D^ and AB for sparseRT')
-        dest_dir = '{}{}'.format(
-            SPARSERT_MATERIALS_DATA_DIR, osp.dirname(self.path).split('../')[1])
-        if not osp.exists(dest_dir):
-            os.makedirs(dest_dir)
-        basename = osp.join(dest_dir, osp.basename(self.path).split('.')[0])
-        return self.save_degrees_hat(basename), self.save_AB(basename)
+        degrees_path=dest_dir+SPARSERT_DEGREES
+        AB_path=dest_dir+SPARSERT_AB
+        return self.save_degrees_hat(degrees_path), self.save_AB(AB_path)
 
     def edge_index_to_adj_list(self):
         self.adj_list = edge_index_to_adj_list(self.edge_index, self.num_nodes)

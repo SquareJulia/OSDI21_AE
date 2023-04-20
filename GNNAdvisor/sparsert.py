@@ -28,11 +28,15 @@ class SparseRTLayer():
         self.cubin_file = ''
         self.cu_function = None
 
+    def path_for_SparseRT(self, path):
+        return osp.abspath(path)
+
     def gen_ptx(self):
         gen_ptx_command = "python ../SparseRT/sparsednn/code_gen_ptx.py --A_dim {} --B_dim {} \
     --C_dim {} --A_blocks {} --C_blocks {} --Gy {} \
         --degrees_file {} --AB_file {} --outfile {}"\
-            .format(self.A_dim, self.B_dim, self.C_dim, self.A_blocks, self.C_blocks, self.Gy, self.degrees_file, self.AB_file, self.ptx_file)
+            .format(self.A_dim, self.B_dim, self.C_dim, self.A_blocks, self.C_blocks, self.Gy,
+                    self.path_for_SparseRT(self.degrees_file), self.path_for_SparseRT(self.AB_file), self.path_for_SparseRT(self.ptx_file))
         if self.verbose:
             log.info('+ generating ptx with C_dim:{}...'.format(self.C_dim))
             print(gen_ptx_command)
@@ -64,17 +68,9 @@ class SparseRTLayer():
         else:
             remove_files_if_exists(self.ptx_file, self.cubin_file)
 
-    def gen_ptx_and_cubin(self, inputInfo):
-        dist_without_suffix = self.AB_file.replace(
-            'data', 'dist').split('.npz')[0]
-        d_temp = 'd' if inputInfo.reorder_by_degree_flag else 'x'
-        r_temp = 'r{}'.format(
-            inputInfo.rabbitBarrier) if inputInfo.reorder_rabbit_flag else 'x'
-        template = '{}_{}_{}{}_{}_{}'.format(
-            dist_without_suffix, self.C_dim, d_temp, r_temp, inputInfo.density, inputInfo.A_tileDim)  # TODO:use template
-        self.ptx_file = '{}.ptx'.format(template)
-        self.cubin_file = '{}.cubin'.format(template)
-        self.prepare_dist_path(osp.dirname(self.ptx_file))
+    def gen_ptx_and_cubin(self, inputInfo, basepath):
+        self.ptx_file = '{}.ptx'.format(basepath)
+        self.cubin_file = '{}.cubin'.format(basepath)
         self.gen_ptx()
         self.gen_cubin()
 

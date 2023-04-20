@@ -21,5 +21,5 @@ cmake-3.16.5
 GNNAdvisor/error.txt
 GNNAdvisor/logs/*
 GNNAdvisor/new-logs/*
-SparseRT/materials/*
+SparseRT/temp/*
 preprocessed/*

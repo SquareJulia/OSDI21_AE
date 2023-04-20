@@ -286,8 +286,8 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         replace("C_dim", str(C_dim)).replace(
             "B_dim", str(B_dim)).replace("AB_sparse_tidy.npy", AB_file)  # buggy
     token = str(np.random.random())[2:5]
-    temp_cu_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".cu"
-    temp_ptx_file_name = "../SparseRT/materials/temp/temp_stub" + token + ".ptx"
+    temp_cu_file_name = "../SparseRT/temp/temp_stub" + token + ".cu"
+    temp_ptx_file_name = "../SparseRT/temp/temp_stub" + token + ".ptx"
 
     open(temp_cu_file_name, "w").write(program)
     # TODO: absolute for myself
@@ -319,13 +319,11 @@ def gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file):
         ptxs.append(block_ptxs)
         store_ptxs.append(store_ptx)
 
-
     if RESIDUAL or NO_RELU:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, False)
     else:
         insert_ptx(temp_ptx_file_name, outfile, ptxs, store_ptxs)
     # log.info('# Modify ptx time(s): {:.3f}'.format(time.perf_counter()-start))
-
 
 
 gencode(degrees, AB, outfile, C_dim, A_blocks, C_blocks, GY, AB_file)

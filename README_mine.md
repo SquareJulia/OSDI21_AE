@@ -1,9 +1,25 @@
+Preprocessing result stored at:
 ```
-{graph_name}_{C_dim}_{degree?d:x}{rabbit?r:x}{rabbit?rabbitBarrier:}_{density}_{A_tileDim}
-```
+preprocessed/{dataDir}/{graphName}/
+{num_features}_{hidden}_{num_classes}_{strategy}_{density}_{tileDim}
+
 eg. 
-citeseer_16_dr45_0.003_80.ptx
-citeseer_16_dr45_0.003_80.cubin
+preprocessed/
+    osdi-ae-graphs/citeseer/
+        1000_16_7_rb_0.001_32/
+            dataset.pt
+            inputInfo.pt
+            inputLayerSpRT.pt
+            hiddenLayerSpRT.pt
+            SparseRT/
+                AB.npz
+                degrees.npy
+                inputLayer.ptx
+                inputLayer.cubin
+                hiddenLayer.ptx
+                hiddenLayer.cubin
+```
+
 
 cd METIS_module/pymetis
 ./configure.py

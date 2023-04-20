@@ -10,6 +10,13 @@ PREPROCESSED_DATASET = 'dataset.pt'
 PREPROCESSED_INPUT_INFO = 'inputInfo.pt'
 PREPROCESSED_INPUT_LAYER_SPRT = 'inputLayerSpRT.pt'
 PREPROCESSED_HIDDEN_LAYER_SPRT = 'hiddenLayerSpRT.pt'
+PREPROCESSED_SPARSERT_DIR = 'SparseRT/'
+
+SPARSERT_AB = 'AB.npz'
+SPARSERT_DEGREES = 'degrees.npy'
+SPARSERT_INPUT_LAYER = 'inputLayer'
+SPARSERT_HIDDEN_LAYER = 'hiddenLayer'
+
 
 ReorderStrategyAlias = {
     ReorderStrategy['NONE']: 'no',

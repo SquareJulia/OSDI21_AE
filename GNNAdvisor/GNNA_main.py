@@ -1,4 +1,3 @@
-from constants import *
 import log
 from sparsert import SparseRTLayer
 import ctypes
@@ -19,6 +18,8 @@ from gnn_conv import *
 from dataset import *
 
 import os
+from constants import *
+
 from reorder import ReorderStrategy
 
 
@@ -67,7 +68,7 @@ dim, hidden, classes = args.dim, args.hidden, args.classes
 density, A_tileDim, B_tileDim = args.density, args.A_tileDim, args.B_tileDim
 verbose_mode = args.verbose_mode == 'True'
 
-reorder_strategy_name = reorder_strategy.upper()
+reorder_strategy_name = args.reorder_strategy.upper()
 if reorder_strategy_name not in ReorderStrategy.__members__:
     raise ValueError('Reorder strategy not valid !!!')
 reorder_strategy = ReorderStrategy[reorder_strategy_name]
@@ -94,7 +95,8 @@ pre_dataset = pre_dir+PREPROCESSED_DATASET
 pre_inputInfo = pre_dir+PREPROCESSED_INPUT_INFO
 pre_inputLayerSpRT = pre_dir+PREPROCESSED_INPUT_LAYER_SPRT
 pre_hiddenLayerSpRT = pre_dir+PREPROCESSED_HIDDEN_LAYER_SPRT
-if not osp.exists(pre_dir) or not all_files(pre_dataset, pre_inputInfo, pre_inputLayerSpRT, pre_hiddenLayerSpRT):
+pre_SparseRT_dir = pre_dir+PREPROCESSED_SPARSERT_DIR
+if not osp.exists(pre_dir) or not all_files(pre_dataset, pre_inputInfo, pre_inputLayerSpRT, pre_hiddenLayerSpRT) or not osp.isdir(pre_SparseRT_dir):
     raise FileNotFoundError(
         'Preprocessing files not found! Run "GNNA_main_pre.py first!')
 

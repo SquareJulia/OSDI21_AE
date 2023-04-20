@@ -19,6 +19,7 @@ from gnn_conv import *
 from dataset import *
 
 import os
+from reorder import ReorderStrategy
 
 
 parser = argparse.ArgumentParser()
@@ -54,13 +55,8 @@ parser.add_argument('--verbose_mode', type=str, choices=[
 parser.add_argument('--loadFromTxt', type=str, choices=['True', 'False'], default='False',
                     help="True: load the graph TXT edge list, False: load from .npy, default: False (load from npz fast)")
 
-
-parser.add_argument('--reordered_by_degree', type=str, choices=['True', 'False'], default='True',
-                    help="True: used degree reordering, False, skipped degree reordering, default: True.")
-parser.add_argument('--reordered_by_rabbit', type=str, choices=['True', 'False'], default='True',
-                    help="True: used rabbit reordering, False, skipped rabbit reordering, default: True.")
-parser.add_argument("--rabbitRatio", type=float, default=0.6,
-                    help="Ratio of (possibly reordered by degree descending) vertices to be reordered by rabbit, default=0.6")
+parser.add_argument('--reorder_strategy', type=str, choices=['None', 'random', 'degree', 'rabbit', 'METIS'], default='None',
+                    help="Strategy of reordering the input graph. Possible choices are: None, random, degree, rabbit, METIS; Default: None.")
 
 
 # args = parser.parse_args()
@@ -70,9 +66,11 @@ loadFromTxt = args.loadFromTxt == 'True'
 dim, hidden, classes = args.dim, args.hidden, args.classes
 density, A_tileDim, B_tileDim = args.density, args.A_tileDim, args.B_tileDim
 verbose_mode = args.verbose_mode == 'True'
-reordered_by_degree = args.reordered_by_degree == 'True'
-reordered_by_rabbit = args.reordered_by_rabbit == 'True'
-rabbitRatio = args.rabbitRatio
+
+reorder_strategy_name = reorder_strategy.upper()
+if reorder_strategy_name not in ReorderStrategy.__members__:
+    raise ValueError('Reorder strategy not valid !!!')
+reorder_strategy = ReorderStrategy[reorder_strategy_name]
 
 
 # requires GPU for evaluation.
@@ -90,7 +88,7 @@ path = osp.join(
     args.dataDir, args.dataset if loadFromTxt else args.dataset+'.npz')
 pre_dir_data = pre_dir_data_template(path)
 pre_dir_params = pre_dir_params_template_base(
-    dim, hidden, classes, reordered_by_degree, reordered_by_rabbit, rabbitRatio, density, A_tileDim)
+    dim, hidden, classes, reorder_strategy, density, A_tileDim)
 pre_dir = pre_dir_data+pre_dir_params
 pre_dataset = pre_dir+PREPROCESSED_DATASET
 pre_inputInfo = pre_dir+PREPROCESSED_INPUT_INFO

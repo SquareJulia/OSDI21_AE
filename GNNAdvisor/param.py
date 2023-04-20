@@ -150,9 +150,9 @@ class inputProperty(object):
         manual_mode: using user-specified parameters
         auto_mode:   determining the parameters according to the GPU resources and scheduling performance consideration.
         '''
-        # Determine whether by community-detection(default rabbit).
-        if not self.manual_mode and math.sqrt(self.avgEdgeSpan) > math.sqrt(self.num_nodes)/100:
-            self.reorder_strategy = ReorderStrategy['RABBIT']
+        # Determine whether by community-detection(default rabbit). TODO
+        # if not self.manual_mode and math.sqrt(self.avgEdgeSpan) > math.sqrt(self.num_nodes)/100:
+        #     self.reorder_strategy = ReorderStrategy['RABBIT']
         self.dataset_obj.reorder(self.reorder_strategy)
         self.dataset_obj.gen_degrees_hat()
 

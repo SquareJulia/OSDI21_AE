@@ -1,22 +1,6 @@
 #include <torch/extension.h>
 #include <vector>
 
-// torch::Tensor SAG_cuda(
-//     torch::Tensor input,
-//     torch::Tensor row_pointers,
-//     torch::Tensor column_index,
-//     torch::Tensor degrees,
-//     torch::Tensor part_pointers,
-//     torch::Tensor part2Node,
-//     int partSize,
-//     int dimWorker,
-//     int warpPerBlock,
-//     long long sprt_cu_function,
-//     int A_blocks,
-//     int C_blocks,
-//     int Block_size,
-//     long long pctx_ptr);
-
 std::vector<torch::Tensor> spmm_forward_cuda(
     torch::Tensor input,
     torch::Tensor weight,

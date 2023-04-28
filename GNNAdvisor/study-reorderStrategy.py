@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-import argparse
 import os
+import argparse
 os.environ["PYTHONWARNINGS"] = "ignore"
-
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--preOrRun", type=str, choices=['pre', 'run'],
                     default="pre", help="preprocess or run: pre/run")
@@ -12,24 +10,23 @@ args = parser.parse_args()
 is_pre = args.preOrRun == 'pre'
 
 loadFromTxt = False
-verbose_mode = True
+verbose_mode = False
 dataDir = '../osdi-ae-graphs'
 dataset = [
-    ('citeseer'	        , 3703	    , 6   ),  
-        ('cora' 	        , 1433	    , 7   ),  
-        ('pubmed'	        , 500	    , 3   ),
+    ('citeseer', 3703, 6),
+    ('cora', 1433, 7),
+    ('pubmed', 500, 3),
 ]
 manual_mode = True
 
-density_li = [0.001, 0.005, 0.01, 0.012, 0.02, 0.1]
-
-
-A_tileDim = 80
-B_tileDim = 80
+density = 0.005
+A_tileDim = B_tileDim = 80
 A_blockDim = 16
-reorder_strategy = 'rabbit'
 
-for density in density_li:
+# reorder_strategy_li = ['METIS']
+reorder_strategy_li = ['None', 'random', 'degree', 'rabbit']
+
+for reorder_strategy in reorder_strategy_li:
     if is_pre:
         for data, d, c in dataset:
             command_pre = "python GNNA_main_pre.py \
@@ -42,11 +39,11 @@ for density in density_li:
             os.system(command_pre)
     else:
         print("******************************")
-        print("++ density: {}".format(density))
+        print("++ reorderStrategy: {}".format(reorder_strategy))
         print("******************************")
 
         for data, d, c in dataset:
-            print("{}---density: {}".format(data, density))
+            print("{}---reorderStrategy: {}".format(data, reorder_strategy))
             print("=================")
             command_train = "python GNNA_main.py \
             --dataset {} --dim {} --classes {}\

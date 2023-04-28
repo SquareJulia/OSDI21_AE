@@ -156,10 +156,11 @@ class inputProperty(object):
         self.dataset_obj.reorder(self.reorder_strategy)
         self.dataset_obj.gen_degrees_hat()
 
+        self.decider_GNNA()
+
         # Determine other parameters.
         if not self.manual_mode:
             self.decider_split()
-            self.decider_GNNA()
             self.decider_SparseRT()
 
             if self.verbose_flag:

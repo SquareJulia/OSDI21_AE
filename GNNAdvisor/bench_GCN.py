@@ -1,48 +1,48 @@
 #!/usr/bin/env python3
 import os
+import argparse
+
 os.environ["PYTHONWARNINGS"] = "ignore"
+parser = argparse.ArgumentParser()
+parser.add_argument("--preOrRun", type=str, choices=['pre', 'run'],
+                    default="pre", help="preprocess or run: pre/run")
+
+args = parser.parse_args()
+is_pre = args.preOrRun == 'pre'
 
 
 loadFromTxt = False
-# verbose_mode = False
-verbose_mode = True
-# dataDir = '../my-test-graphs'
+verbose_mode = False
 dataDir = '../osdi-ae-graphs'
-
-manual_mode = False
-
-
 dataset = [
-    # ('g5nodes.txt', 1000, 2)
-    # ('g100nodes.txt', 1000, 6)
-    # ('g100nodes_2.txt', 1000, 6)
     ('citeseer', 3703, 6),
-    # ('g50nodes.txt', 1000, 6)
-    # ('g10nodes.txt', 1000, 6)
+    ('cora', 1433, 7),
+    # ('pubmed', 500, 3),
 ]
-density = 0.1
-density = 0.00083
-A_tileDim = 80
-B_tileDim = 80
-A_blockDim = 8
+
+density = 0.005
+A_tileDim = B_tileDim = 80
+A_blockDim = 16
 reorder_strategy = 'rabbit'
+manual_mode = True
 
 
 for data, d, c in dataset:
-    command_pre = "python GNNA_main_pre.py \
-    --dataset {} --dim {} --classes {}\
-        --loadFromTxt {} --dataDir {} --density {}\
-            --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
-                --verbose_mode {} --manual_mode {}".format(
-        data, d,  c, loadFromTxt, dataDir, density,
-        A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode, manual_mode)
-    # os.system(command_pre)
-
-    command_train = "python GNNA_main.py \
-    --dataset {} --dim {} --classes {}\
-        --loadFromTxt {} --dataDir {}  --density {}\
-            --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
-                --verbose_mode {}".format(
-        data, d,  c, loadFromTxt, dataDir, density,
-        A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode)
-    os.system(command_train)
+    if is_pre:
+        command_pre = "python GNNA_main_pre.py \
+        --dataset {} --dim {} --classes {}\
+            --loadFromTxt {} --dataDir {} --density {}\
+                --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
+                    --verbose_mode {} --manual_mode {}".format(
+            data, d,  c, loadFromTxt, dataDir, density,
+            A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode, manual_mode)
+        os.system(command_pre)
+    else:
+        command_train = "python GNNA_main.py \
+        --dataset {} --dim {} --classes {}\
+            --loadFromTxt {} --dataDir {}  --density {}\
+                --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
+                    --verbose_mode {}".format(
+            data, d,  c, loadFromTxt, dataDir, density,
+            A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode)
+        os.system(command_train)

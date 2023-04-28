@@ -18,12 +18,9 @@ A_tileDim = B_tileDim = 640
 blockDim_li = [8, 16, 32, 64, 128, 160]
 
 dataset = [
-    # ('g5nodes.txt', 1000, 2)
-    # ('g100nodes.txt', 1000, 6)
-    # ('g100nodes_2.txt', 1000, 6)
     ('citeseer', 3703, 6),
-    # ('g50nodes.txt', 1000, 6)
-    # ('g10nodes.txt', 1000, 6)
+    ('cora', 1433, 7),
+    ('pubmed', 500, 3),
 ]
 reorder_strategy = 'rabbit'
 

@@ -1,19 +1,15 @@
 mv *.log logs/
 mv *.csv logs/
 
-# ./s7-4_1_neighbor_partitioning.py| tee study_partition.log
-# ./2_study2csv.py study_partition.log 
 
-# ./s7-4_2_dimension_partitiong.py| tee study_dimWorker.log
-# ./2_study2csv.py study_dimWorker.log 
-
-# ./s7-4_3_node_renumbering.py| tee study_nodeReordering.log
-# ./2_study2csv.py study_nodeReordering.log
-
-# ./s7-5_1_hidden_dimension.py| tee study_hiddenDimension.log
-# ./2_study2csv.py study_hiddenDimension.log 
-
-
-# ./study-reorderStrategy-pre.py
-./study-reorderStrategy-run.py|tee study_reorderStrategy.log
+# ./study-reorderStrategy.py --preOrRun pre
+./study-reorderStrategy.py --preOrRun run|tee study_reorderStrategy.log
 ./2_study2csv.py study_reorderStrategy.log
+
+# ./study-tileDim.py --preOrRun pre
+# ./study-tileDim.py --preOrRun run|tee study_tileDim.log
+# ./2_study2csv.py study_tileDim.log
+
+# ./study-density.py --preOrRun pre
+# ./study-density.py --preOrRun run|tee study_density.log
+# ./2_study2csv.py study_density.log

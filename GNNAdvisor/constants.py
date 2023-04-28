@@ -39,4 +39,4 @@ def pre_dir_params_template(inputInfo):
 
 def pre_dir_params_template_base(num_features, hidden, num_classes, reorder_strategy, density, tileDim):
     strategy = ReorderStrategyAlias[reorder_strategy]
-    return '{}_{}_{}_{}_{}_{}/'.format(num_features, hidden, num_classes, strategy, density, tileDim)
+    return '{}_{}_{}_{}_{:.5f}_{}/'.format(num_features, hidden, num_classes, strategy, density, tileDim)

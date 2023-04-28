@@ -2,21 +2,18 @@
 import os
 os.environ["PYTHONWARNINGS"] = "ignore"
 
-# density = 1.0
-# A_tileDim = 4
-# B_tileDim = 4
-# A_blockDim = 4
 
-# A_tileDim = 32
-# B_tileDim = 32
-# A_blockDim = 16
+loadFromTxt = False
+# verbose_mode = False
+verbose_mode = True
+# dataDir = '../my-test-graphs'
+dataDir = '../osdi-ae-graphs'
 
-A_tileDim = 4
-B_tileDim = 4
-A_blockDim = 2
+manual_mode = True
 
-# density_li = [0, 0.001, 0.01, 1]
-density_li = [1]
+density_li = [0.001, 0.0009, 0.005, 0.01]
+density_li = [0.012, 0.015, 0.02, 0.1]
+
 
 dataset = [
     # ('g5nodes.txt', 1000, 2)
@@ -26,13 +23,9 @@ dataset = [
     # ('g50nodes.txt', 1000, 6)
     # ('g10nodes.txt', 1000, 6)
 ]
-
-loadFromTxt = False
-loadFromTxt = True
-# verbose_mode = False
-verbose_mode = True
-# dataDir = '../my-test-graphs'
-dataDir = '../osdi-ae-graphs'
+A_tileDim = 80
+B_tileDim = 80
+A_blockDim = 16
 reorder_strategy = 'rabbit'
 
 for density in density_li:
@@ -41,16 +34,18 @@ for density in density_li:
         --dataset {} --dim {} --classes {}\
             --loadFromTxt {} --dataDir {} --density {}\
                 --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
-                    --verbose_mode {} --manual_mode False".format(
+                    --verbose_mode {} --manual_mode {}".format(
             data, d,  c, loadFromTxt, dataDir, density,
-            A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode)
-        os.system(command_pre)
+            A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode, manual_mode)
+        # os.system(command_pre)
+
+        print('density:{}'.format(density))
 
         command_train = "python GNNA_main.py \
         --dataset {} --dim {} --classes {}\
-            --loadFromTxt {} --dataDir {}  \
+            --loadFromTxt {} --dataDir {}  --density {}\
                 --A_tileDim {} --B_tileDim {} --A_blockDim {} --reorder_strategy {}\
                     --verbose_mode {}".format(
-            data, d,  c, loadFromTxt, dataDir,
+            data, d,  c, loadFromTxt, dataDir, density,
             A_tileDim, B_tileDim, A_blockDim, reorder_strategy, verbose_mode)
         os.system(command_train)

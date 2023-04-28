@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import sys 
+import sys
 
 if len(sys.argv) < 2:
-    raise ValueError("Usage: ./1_log2csv.py result.log")
+    raise ValueError("Usage: ./1_study2csv.py result.log")
 
 fp = open(sys.argv[1], "r")
 
@@ -10,7 +10,7 @@ param_li = []
 dataset_li = []
 time_li = []
 for line in fp:
-    if  "++" in line:
+    if "++" in line:
         param_li.append(line.split(":")[1])
     if "---" in line:
         data = line.split('---')[0]

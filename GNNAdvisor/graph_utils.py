@@ -40,7 +40,7 @@ def split_adj_list_by_density(adj_list, density, TILE_ROW, TILE_COL, num_nodes):
         Note: The last row%TILE_ROW rows belong to dense_adj without splitting.
             (to make the row dim divisible by TILE_ROW for SparseRT)
         Return: dense_adj(list[list[]])
-                sparse_adj_transposed(list[list[]])
+                sparse_adj(list[list[]])
     '''
     dense_adj = [[] for i in range(num_nodes)]
     assert num_nodes > TILE_ROW  # TODO
@@ -80,9 +80,6 @@ def adj_list_to_csr(adj_list):
     row_pointers = [0, *accumulate(degrees)]
     column_index = reduce(lambda x, y: x+y, adj_list)
     return torch.IntTensor(row_pointers), torch.IntTensor(column_index)
-
-
-
 
 
 def degrees_from_edge_index(edge_index, num_nodes):

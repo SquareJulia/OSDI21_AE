@@ -12,6 +12,8 @@ def metis_reorder(edge_index, n):
     return: iperm
     '''
     adj_list = edge_index_to_adj_list(edge_index, n)
+    print('to node_nd')
+    print(adj_list)
     node_nd = pymetis.nested_dissection(adjacency=adj_list)
     iperm = node_nd[1]
     return iperm

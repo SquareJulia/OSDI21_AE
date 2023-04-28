@@ -114,6 +114,8 @@ class custom_dataset(torch.nn.Module):
         if self.verbose_flag:
             log.info('# edges: {}'.format(self.num_edges))
         self.avg_density = self.num_edges/(self.num_nodes*self.num_nodes)
+        if self.verbose_flag:
+            log.info('average density: {:.3f}'.format(self.avg_density))
         self.degrees_cpu = degrees_from_edge_index(
             self.edge_index, self.num_nodes)
         self.degrees_gpu = None
@@ -215,8 +217,8 @@ class custom_dataset(torch.nn.Module):
         '''
         if self.verbose_flag:
             log.info('# Saving D^ and AB for sparseRT')
-        degrees_path=dest_dir+SPARSERT_DEGREES
-        AB_path=dest_dir+SPARSERT_AB
+        degrees_path = dest_dir+SPARSERT_DEGREES
+        AB_path = dest_dir+SPARSERT_AB
         return self.save_degrees_hat(degrees_path), self.save_AB(AB_path)
 
     def edge_index_to_adj_list(self):
@@ -230,7 +232,7 @@ if __name__ == '__main__':
     # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "cora.npz")
     # path = osp.join("/home/yuke/.graphs/osdi-ae-graphs/", "amazon0505.npz")
     path = osp.join(
-        "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "g10nodes.txt")
+        "/home/xiaosiyier/projects/OSDI21_AE/my-test-graphs/", "test_rabbit.txt")
     dataset = custom_dataset(path, 16, 10, load_from_txt=True, verbose=True)
     # reorder
     dataset.print_adj_matrix()

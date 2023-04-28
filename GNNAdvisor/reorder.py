@@ -40,7 +40,7 @@ def map_edge_index(iperm, edge_index):
 def reorder_random(edge_index, num_nodes):
     ''' Reorder vertices by randomly. Modify edge_index in-place.
     '''
-    iperm = random.permutation(num_nodes)
+    iperm = random.permutation(int(num_nodes))
     map_edge_index(iperm, edge_index)
 
 
@@ -60,4 +60,5 @@ def reorder_metis(edge_index, num_nodes):
     ''' Reorder vertices with METIS. Modify edge_index in-place.
     '''
     iperm = metis_reorder(edge_index, num_nodes)
+    print('Got iperm')
     map_edge_index(iperm, edge_index)

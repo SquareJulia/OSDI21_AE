@@ -173,22 +173,17 @@ def train():
 
 if __name__ == '__main__':
     # dry run
-    # for _ in range(10):
-    #     train()
+    for _ in range(10):
+        train()
     # exit(0)
 
     torch.cuda.synchronize()
     start_train = time.perf_counter()
-    # for _ in tqdm(range(1, args.num_epoches + 1)):
-    #     train()
-    # train()
-    for _ in range(3):
+    for _ in tqdm(range(1, args.num_epoches + 1)):
         train()
     torch.cuda.synchronize()
     train_time = time.perf_counter() - start_train
 
-    # print('Average train Time (ms): {:.3f}'.format(
-    #     train_time*1e3/args.num_epoches))
-    print('Train Time (ms): {:.3f}'.format(
-        train_time*1e3))
+    print('Time (ms): {:.3f}'.format(
+        train_time*1e3/args.num_epoches))
     print()

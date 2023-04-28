@@ -1,5 +1,5 @@
-mv *.log new-logs/
-mv *.csv new-logs/
+mv *.log logs/
+mv *.csv logs/
 
 # ./s7-4_1_neighbor_partitioning.py| tee study_partition.log
 # ./2_study2csv.py study_partition.log 
@@ -13,4 +13,7 @@ mv *.csv new-logs/
 # ./s7-5_1_hidden_dimension.py| tee study_hiddenDimension.log
 # ./2_study2csv.py study_hiddenDimension.log 
 
-./s7-density.py|tee study_density.log
+
+# ./study-reorderStrategy-pre.py
+./study-reorderStrategy-run.py|tee study_reorderStrategy.log
+./2_study2csv.py study_reorderStrategy.log

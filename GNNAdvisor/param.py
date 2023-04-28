@@ -191,7 +191,7 @@ class inputProperty(object):
     def print_param_general(self):
         log.info('Reorder and split params:')
         print('reorder strategy: {}'.format(self.reorder_strategy.name))
-        print('density: {:.3f}'.format(self.density))
+        print('density: {:.5f}'.format(self.density))
         print('A_tileDim: {}'.format(self.A_tileDim))
         print('B_tileDim: {}'.format(self.B_tileDim))
         print('----------------------------')

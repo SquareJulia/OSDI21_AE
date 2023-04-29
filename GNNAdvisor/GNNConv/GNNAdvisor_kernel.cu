@@ -86,7 +86,6 @@ float SparseRT(torch::Tensor BC,
     // std::cout << "*ctx_ptr:" << *ctx_ptr << std::endl;
     checkCudaErrors(cuCtxSetCurrent(*ctx_ptr));
     CUfunction *func_ptr = (CUfunction *)sprt_cu_function;
-
     float **d_BC, **d_AC;
     float *tmp;
     gpuErrchk(cudaMalloc((void **)&d_BC, sizeof(float *)));
@@ -97,27 +96,32 @@ float SparseRT(torch::Tensor BC,
     gpuErrchk(cudaMemcpy(d_AC, &tmp, sizeof(float *), cudaMemcpyHostToDevice));
     void *args[2] = {&d_BC, &d_AC};
 
+    CUstream stream;
+    // checkCudaErrors(cuStreamCreate(&stream, CU_STREAM_DEFAULT));
+    checkCudaErrors(cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+
     float msSpRT = 0.0;
 
 #ifdef PROFILE
     cudaEvent_t startSpRT, stopSpRT;
     gpuErrchk(cudaEventCreate(&startSpRT));
     gpuErrchk(cudaEventCreate(&stopSpRT));
-    cudaEventRecord(startSpRT, 0);
+    cudaEventRecord(startSpRT, stream);
     for (int i = 0; i < PROFILE; i++)
 #endif
         checkCudaErrors(cuLaunchKernel(*func_ptr, A_blocks, C_blocks, 1, // A_blocks x C_blocks x 1 blocks
                                        Block_size, 1, 1,                 // Block_size x 1 x 1 threads
-                                       0, 0, args, 0));
+                                       0, stream, args, 0));
 
 #ifdef PROFILE
-    gpuErrchk(cudaEventRecord(stopSpRT, 0));
+    gpuErrchk(cudaEventRecord(stopSpRT, stream));
     gpuErrchk(cudaEventSynchronize(stopSpRT));
 
     gpuErrchk(cudaEventElapsedTime(&msSpRT, startSpRT, stopSpRT));
 #endif
     gpuErrchk(cudaFree((void *)d_BC));
     gpuErrchk(cudaFree((void *)d_AC));
+    checkCudaErrors(cuStreamDestroy(stream));
 
     return msSpRT;
 }
@@ -170,13 +174,16 @@ std::vector<torch::Tensor> spmm_forward_cuda(
     const int grid = (num_parts * WARP_SIZE + block - 1) / block;
     const int shared_memory = partSize * warpPerBlock * sizeof(int) + warpPerBlock * dim * sizeof(float);
 
+    cudaStream_t streamGNNA;
+    gpuErrchk(cudaStreamCreateWithFlags(&streamGNNA, cudaStreamNonBlocking));
+
 #ifdef PROFILE
     cudaEventRecord(startAdvisor, 0);
     for (int i = 0; i < PROFILE; i++)
 #endif
 
         AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "spmm_cuda_forward", ([&]
-                                                                              { spmm_forward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
+                                                                              { spmm_forward_cuda_kernel<scalar_t><<<grid, block, shared_memory, streamGNNA>>>(
                                                                                     output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                                                                     input_weight.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                                                                     row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
@@ -205,6 +212,7 @@ std::vector<torch::Tensor> spmm_forward_cuda(
 
     printf("forward %.3f %.3f %.3f\n", msSpRT / PROFILE, msAdvisor / PROFILE, (msSpRT + msAdvisor) / PROFILE);
 #endif
+    gpuErrchk(cudaStreamDestroy(streamGNNA));
     return {output};
 }
 
@@ -333,6 +341,7 @@ std::vector<torch::Tensor> spmm_backward_cuda(
         warmup<<<1, 1>>>();
     }
 #endif
+
     // Mode 1: SparseRT
 
     float msSpRT = SparseRT(d_output, d_input_prime, A_blocks, C_blocks, Block_size, sprt_cu_function, pctx_ptr);
@@ -346,12 +355,16 @@ std::vector<torch::Tensor> spmm_backward_cuda(
     const int block = warpPerBlock * WARP_SIZE;
     const int grid = (num_parts * WARP_SIZE + block - 1) / block;
     const int shared_memory = partSize * warpPerBlock * sizeof(int) + warpPerBlock * dim * sizeof(float);
+
+    cudaStream_t streamGNNA;
+    gpuErrchk(cudaStreamCreate(&streamGNNA));
+
 #ifdef PROFILE
-    cudaEventRecord(startAdvisor, 0);
+    cudaEventRecord(startAdvisor, streamGNNA);
     for (int i = 0; i < PROFILE; i++)
 #endif
         AT_DISPATCH_FLOATING_TYPES(d_output.scalar_type(), "spmm_cuda_backward", ([&]
-                                                                                  { spmm_backward_cuda_kernel<scalar_t><<<grid, block, shared_memory>>>(
+                                                                                  { spmm_backward_cuda_kernel<scalar_t><<<grid, block, shared_memory, streamGNNA>>>(
                                                                                         d_input_prime.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                                                                         d_output.packed_accessor32<scalar_t, 2, torch::RestrictPtrTraits>(),
                                                                                         row_pointers.packed_accessor32<int, 1, torch::RestrictPtrTraits>(),
@@ -373,13 +386,15 @@ std::vector<torch::Tensor> spmm_backward_cuda(
         exit(-1);
     }
 #ifdef PROFILE
-    gpuErrchk(cudaEventRecord(stopAdvisor, 0));
+    gpuErrchk(cudaEventRecord(stopAdvisor, streamGNNA));
     gpuErrchk(cudaEventSynchronize(stopAdvisor));
     float msAdvisor;
     gpuErrchk(cudaEventElapsedTime(&msAdvisor, startAdvisor, stopAdvisor));
 
     printf("backward %.3f %.3f %.3f\n", msSpRT / PROFILE, msAdvisor / PROFILE, (msSpRT + msAdvisor) / PROFILE);
 #endif
+    gpuErrchk(cudaStreamDestroy(streamGNNA));
+
     auto d_input = torch::mm(d_input_prime, W.transpose(0, 1));
     auto d_weight = torch::mm(X.transpose(0, 1), d_input_prime);
 

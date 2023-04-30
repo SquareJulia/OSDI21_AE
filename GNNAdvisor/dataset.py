@@ -105,17 +105,18 @@ class custom_dataset(torch.nn.Module):
         self.avg_degree = self.num_edges / self.num_nodes
         self.avg_edgeSpan = np.mean(np.abs(np.subtract(src_li, dst_li)))
 
+        log.info("# avg_degree: {:.2f}".format(self.avg_degree))
+
         if self.verbose_flag:
             print('# nodes: {}'.format(self.num_nodes))
-            print("# avg_degree: {:.2f}".format(self.avg_degree))
             print("# avg_edgeSpan: {}".format(int(self.avg_edgeSpan)))
 
         self.edge_index = np.stack([src_li, dst_li])
         if self.verbose_flag:
             log.info('# edges: {}'.format(self.num_edges))
-        self.avg_density = self.num_edges/(self.num_nodes*self.num_nodes)
-        if self.verbose_flag:
-            log.info('average density: {:.3f}'.format(self.avg_density))
+        self.avg_density = (self.num_edges+self.num_nodes) / \
+            (self.num_nodes*self.num_nodes)
+        log.info('average density: {:.6f}'.format(self.avg_density))
         self.degrees_cpu = degrees_from_edge_index(
             self.edge_index, self.num_nodes)
         self.degrees_gpu = None
@@ -157,10 +158,17 @@ class custom_dataset(torch.nn.Module):
         if self.verbose_flag:
             log.done(
                 "# {} Reorder time (s): {:.3f}".format(reorder_strategy.name, reorder_time))
+        log.done(
+            "# {} Reorder time (s): {:.3f}".format(reorder_strategy.name, reorder_time))
 
     def split_by_density(self, density, TILE_ROW, TILE_COL):
+        start = time.perf_counter()
+
         self.dense_adj, self.sparse_adj = split_adj_list_by_density(
             self.adj_list, density, TILE_ROW, TILE_COL, self.num_nodes)
+        split_time = time.perf_counter() - start
+        log.done(
+            "# Split time (s): {:.3f}".format(split_time))
         self.A_dim = len(self.sparse_adj)
         if self.verbose_flag:
             log.done('=> Splitted the adjacency list!')
@@ -203,8 +211,8 @@ class custom_dataset(torch.nn.Module):
     def save_AB(self, path):
         self.AB_coo_matrix = adj_list_to_coo_matrix(
             self.sparse_adj, self.num_nodes)
-        log.info('SparseRT nnz count:{}'.format(
-            self.AB_coo_matrix.count_nonzero()))
+        log.info('avg_density:{:.4f}, SparseRT nnz count:{}'.format(
+            self.avg_density, self.AB_coo_matrix.count_nonzero()))
         save_npz(path, self.AB_coo_matrix)
         return path
 

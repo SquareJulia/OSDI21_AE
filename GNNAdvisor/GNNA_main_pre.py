@@ -174,9 +174,9 @@ inputLayerSpRT.gen_ptx_and_cubin(
 hiddenLayerSpRT.gen_ptx_and_cubin(
     inputInfo, pre_SparseRT_dir+SPARSERT_HIDDEN_LAYER)
 elapsed = time.perf_counter() - start
-if verbose_mode:
-    log.done(
-        "# SparseRT generate .ptx & .cubin, and get function handle (s): {:.3f}".format(elapsed))
+
+log.done(
+    "# SparseRT generate .ptx & .cubin(s): {:.3f}".format(elapsed))
 
 ####################################
 # Building neighbor partitioning.

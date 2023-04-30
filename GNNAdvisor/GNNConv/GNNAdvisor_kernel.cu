@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <vector>
 
-// #define PROFILE 200
+#define PROFILE 200
 #define WARP_SIZE 32
 #define checkCudaErrors(err) __checkCudaErrors(err, __FILE__, __LINE__)
 inline void __checkCudaErrors(CUresult err, const char *file, const int line)

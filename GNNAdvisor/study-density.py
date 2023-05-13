@@ -15,9 +15,9 @@ loadFromTxt = False
 verbose_mode = False
 dataDir = '../osdi-ae-graphs'
 dataset = [
-    ('citeseer', 3703, 6, 0.0011),
-    ('cora', 1433, 7, 0.0018),
-    # ('pubmed', 500, 3, 0.0003),
+    # ('citeseer', 3703, 6, 0.0011),
+    # ('cora', 1433, 7, 0.0018),
+    ('pubmed', 500, 3, 0.0003),
 ]
 manual_mode = True
 
@@ -28,7 +28,7 @@ density_times_li = [1, 10, 30, 50, 100, 120]
 reorder_strategy = 'rabbit'
 
 A_tileDim = B_tileDim = 32
-A_blockDim = 16
+A_blockDim = 32
 
 for density_times in density_times_li:
     if is_pre:

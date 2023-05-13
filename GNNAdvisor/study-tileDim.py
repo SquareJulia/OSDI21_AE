@@ -20,10 +20,11 @@ dataset = [
 ]
 manual_mode = True
 
-density_times = 1
+density_times = 10
 
 # tileDim_li = [80, 240, 400, 560, 720, 880]
-tileDim_li = [880, 1200, 1520, 2400]
+# tileDim_li = [880, 1200, 1520, 2400]
+tileDim_li = [8, 16, 32, 64, 80, 160]
 
 
 reorder_strategy = 'rabbit'
@@ -34,9 +35,9 @@ for tileDim in tileDim_li:
         for data, d, c, base in dataset:
             density = base*density_times
             if data == 'pubmed':
-                A_blockDim = 80
+                A_blockDim = min(tileDim, 16)
             else:
-                A_blockDim = 16
+                A_blockDim = min(tileDim, 32)
 
             command_pre = "python GNNA_main_pre.py \
             --dataset {} --dim {} --classes {}\
@@ -53,9 +54,9 @@ for tileDim in tileDim_li:
 
         for data, d, c, base in dataset:
             if data == 'pubmed':
-                A_blockDim = 80
+                A_blockDim = min(tileDim, 16)
             else:
-                A_blockDim = 16
+                A_blockDim = min(tileDim, 32)
             density = base*density_times
 
             print("{}---tileDim: {}".format(data, A_tileDim))
